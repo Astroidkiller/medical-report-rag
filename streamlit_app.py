@@ -37,14 +37,27 @@ def get_chroma_client():
 
 
 @st.cache_data
-def process_pdf(file_path):
-    full_text = ""
+def process_pdf(file_path, file_hash):
+    extracted_parts = []
 
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
+            # 1. Normal text extraction
             text = page.extract_text()
             if text:
-                full_text += text + "\n"
+                extracted_parts.append(text)
+
+            # 2. Table extraction
+            tables = page.extract_tables()
+            if tables:
+                for table in tables:
+                    for row in table:
+                        if row:
+                            clean_row = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
+                            if clean_row:
+                                extracted_parts.append(" | ".join(clean_row))
+
+    full_text = "\n".join(extracted_parts)
 
     lines = full_text.split("\n")
     chunks = []
@@ -55,7 +68,7 @@ def process_pdf(file_path):
         if not line:
             continue
 
-        if len(current_chunk) + len(line) < 300:
+        if len(current_chunk) + len(line) < 500:
             current_chunk += line + "\n"
         else:
             chunks.append(current_chunk.strip())
@@ -97,8 +110,15 @@ if uploaded_file is not None:
         f.write(uploaded_file.getbuffer())
 
     # Process PDF
-    chunks = process_pdf(file_path)
+    file_bytes = uploaded_file.getvalue()
+    file_hash = get_file_hash(file_bytes)
 
+    # Process PDF
+    chunks = process_pdf(file_path, file_hash)
+    with st.expander("Preview extracted chunks"):
+        for i, chunk in enumerate(chunks[:5]):
+            st.markdown(f"**Chunk {i+1}**")
+            st.code(chunk)
     st.subheader("📊 Report Overview")
     col1, col2 = st.columns(2)
     col1.metric("Chunks Created", len(chunks))
@@ -109,7 +129,8 @@ if uploaded_file is not None:
     embeddings = model.encode(chunks)
 
     chroma_client = get_chroma_client()
-    collection = chroma_client.get_or_create_collection(name="medical_report")
+    collection_name = f"medical_report_{file_hash[:12]}"
+    collection = chroma_client.get_or_create_collection(name=collection_name)
 
     # Clear old data before adding new chunks
     existing_data = collection.get()
@@ -139,22 +160,27 @@ if uploaded_file is not None:
     placeholder="Example: What does hemoglobin mean?"
 
 
+    
     # Quick question suggestions
     st.markdown("**Suggested questions:**")
+
     suggestion_cols = st.columns(3)
-    if suggestion_cols[0].button("What does hemoglobin mean?"):
-        user_question = "What does hemoglobin mean?"
-    if suggestion_cols[1].button("Explain HbA1c"):
-        user_question = "Explain HbA1c"
-    if suggestion_cols[2].button("Summarize my report"):
-        user_question = "Summarize my report"
+
+    if suggestion_cols[0].button("Summarize this report"):
+                user_question = "Summarize this medical report in simple language."
+
+    if suggestion_cols[1].button("Important findings"):
+        user_question = "List any abnormal, high, low, out-of-range, or clinically important findings in this report. If none are clearly shown, say that."
+
+    if suggestion_cols[2].button("Abnormal values"):
+                user_question = "Are there any abnormal or concerning values in this report?"
 
     if user_question:
         query_embedding = model.encode([user_question])[0]
 
         results = collection.query(
             query_embeddings=[query_embedding.tolist()],
-            n_results=2
+            n_results=5
         )
 
         retrieved_docs = results.get("documents", [[]])
