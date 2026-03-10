@@ -1,6 +1,0 @@
-streamlit
-pdfplumber
-sentence-transformers
-chromadb
-groq
-python-dotenv
