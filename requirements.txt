@@ -4,3 +4,8 @@ sentence-transformers
 chromadb
 groq
 python-dotenv
+torch
+transformers
+huggingface-hub
+scikit-learn
+numpy
