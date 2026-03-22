@@ -66,7 +66,7 @@ def process_pdf(file_path):
     if current_chunk:
         chunks.append(current_chunk.strip())
 
-    return chunks
+    return chunks, full_text
 
 
 def get_file_hash(file_bytes):
@@ -99,7 +99,7 @@ if uploaded_file is not None:
         f.write(uploaded_file.getbuffer())
 
     # Process PDF
-    chunks = process_pdf(file_path)
+    chunks, full_report_text = process_pdf(file_path)
 
     st.subheader("📊 Report Overview")
     col1, col2 = st.columns(2)
@@ -146,15 +146,9 @@ if uploaded_file is not None:
         user_question = "Identify any values that are outside the normal range and explain what they mean briefly."
 
     if user_question:
-        query_embedding = model.encode([user_question])[0]
-
-        results = collection.query(
-            query_embeddings=[query_embedding.tolist()],
-            n_results=10
-        )
-
-        retrieved_docs = results.get("documents", [[]])
-        retrieved_text = "\n".join(retrieved_docs[0]) if retrieved_docs and retrieved_docs[0] else ""
+        # Bypassing retrieval to ensure ALL details are captured
+        # We use the full_report_text collected during processing
+        retrieved_text = full_report_text
 
         if not retrieved_text.strip():
             st.error("No relevant context was found in the report for this question.")
@@ -173,18 +167,21 @@ if uploaded_file is not None:
 You are an expert Medical AI Assistant.
 Your job is to analyze the uploaded medical report and extract the most important information clearly and concisely.
 
-### Context (Medical Report):
+### VERY IMPORTANT - PRIVACY RULE:
+- **DO NOT** mention the patient's name, age, gender, or any personal identifying details in your response. 
+- Focus ONLY on the clinical data, test results, and medical findings.
+
+### Context (Complete Medical Report):
 {retrieved_text}
 
 ### Patient's Question:
 {user_question}
 
 ### Instructions for your Response:
-1. **Patient Details First**: ALWAYS start your response with a brief summary of the patient's details if present (Name, Age, Gender, Date) as separate bullet points.
-2. **Important Findings**: Next, provide a strictly organized list of the important test results, abnormal values, or key medical conclusions.
-3. **Concise Descriptions**: Give a very brief, 1-sentence explanation of what each finding means.
-4. **Beautiful Formatting**: Use bold headings (e.g., `### Patient Details`, `### Key Findings`) and clear bullet points.
-5. **No Diagnosis & Strict Context**: Only use the provided context. Do not invent details or diagnose the patient.
+1. **Medical Findings First**: Start your response with a strictly organized list of the important test results, abnormal values, or key medical conclusions.
+2. **Concise Descriptions**: Give a very brief, 1-sentence explanation of what each finding means.
+3. **Beautiful Formatting**: Use bold headings (e.g., `### Key Findings`, `### Lab Results`) and clear bullet points.
+4. **No Diagnosis & Strict Context**: Only use the provided context. Do not invent details or diagnose the patient.
 """
 
                 with st.spinner("Analyzing report..."):
