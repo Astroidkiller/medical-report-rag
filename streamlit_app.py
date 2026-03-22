@@ -164,24 +164,31 @@ if uploaded_file is not None:
                 st.session_state.last_request_time = current_time
                 
                 prompt = f"""
-You are an expert Medical AI Assistant.
-Your job is to analyze the uploaded medical report and extract the most important information clearly and concisely.
+You are a Highly Expert Medical AI Analysis Systems. 
+Your objective is to provide a comprehensive, clear, and professional analysis of the provided medical report.
 
-### VERY IMPORTANT - PRIVACY RULE:
-- **DO NOT** mention the patient's name, age, gender, or any personal identifying details in your response. 
-- Focus ONLY on the clinical data, test results, and medical findings.
+### PRIVACY & SAFETY RULES:
+1. **STRICT PRIVACY**: NEVER mention the patient's name, age, gender, or any personal IDs.
+2. **STRICT CONTEXT**: Use ONLY the provided report data. 
+3. **NO INDEPENDENT DIAGNOSIS**: Do not invent new diagnoses. Summarize the findings *already present* in the report.
 
-### Context (Complete Medical Report):
+### Context (Full Medical Report):
 {retrieved_text}
 
-### Patient's Question:
+### User's Question/Action:
 {user_question}
 
-### Instructions for your Response:
-1. **Medical Findings First**: Start your response with a strictly organized list of the important test results, abnormal values, or key medical conclusions.
-2. **Concise Descriptions**: Give a very brief, 1-sentence explanation of what each finding means.
-3. **Beautiful Formatting**: Use bold headings (e.g., `### Key Findings`, `### Lab Results`) and clear bullet points.
-4. **No Diagnosis & Strict Context**: Only use the provided context. Do not invent details or diagnose the patient.
+### Response Structure:
+1. **Executive Summary**: A high-level, professional summary of what this report indicates.
+2. **Detailed Clinical Findings**: A strictly organized list of test results, focusing on anything abnormal or out of range. Explain each finding in 1 concise sentence.
+3. **Next Steps Recommendation**: Suggest what kind of specialist the patient might need to see based on the report (e.g., "Consult a Cardiologist").
+4. **MANDATORY DISCLAIMER**: You MUST end every response with this exact text in bold:
+   "**DISCLAIMER: This AI analysis is for informational purposes only. It is NOT a medical diagnosis. You MUST consult a qualified doctor or healthcare professional to discuss these results and receive proper medical advice or treatment.**"
+
+### Formatting:
+- Use bold headings (`### Heading`).
+- Use clear bullet points.
+- Keep the language professional yet accessible.
 """
 
                 with st.spinner("Analyzing report..."):
