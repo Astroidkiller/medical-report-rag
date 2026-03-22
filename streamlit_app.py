@@ -127,27 +127,21 @@ if uploaded_file is not None:
 
     default_question = ""
 
-    if st.button("📋 Generate Report Summary"):
-            default_question = "Give a simple summary of this medical report"
-
     user_question = st.text_input(
             "Type your question about the report",
             value=default_question,
             placeholder="Example: What does hemoglobin mean?"
     )
-    "Type your question about the report",
-    placeholder="Example: What does hemoglobin mean?"
-
 
     # Quick question suggestions
-    st.markdown("**Suggested questions:**")
+    st.markdown("**Report Quick Actions:**")
     suggestion_cols = st.columns(3)
-    if suggestion_cols[0].button("What does hemoglobin mean?"):
-        user_question = "What does hemoglobin mean?"
-    if suggestion_cols[1].button("Explain HbA1c"):
-        user_question = "Explain HbA1c"
-    if suggestion_cols[2].button("Summarize my report"):
-        user_question = "Summarize my report"
+    if suggestion_cols[0].button("📋 Summarize Report"):
+        user_question = "Summarize this medical report in simple, patient-friendly language."
+    if suggestion_cols[1].button("🔍 Important Findings"):
+        user_question = "List the most important or unusual findings from this report."
+    if suggestion_cols[2].button("⚠️ Abnormal Values"):
+        user_question = "Identify any values that are outside the normal range and explain what they mean briefly."
 
     if user_question:
         query_embedding = model.encode([user_question])[0]
