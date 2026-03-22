@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import time
+
 # ---------- PAGE CONFIG ----------
 st.set_page_config(
     page_title="Medical Report Assistant",
@@ -148,7 +150,7 @@ if uploaded_file is not None:
 
         results = collection.query(
             query_embeddings=[query_embedding.tolist()],
-            n_results=2
+            n_results=10
         )
 
         retrieved_docs = results.get("documents", [[]])
@@ -157,37 +159,51 @@ if uploaded_file is not None:
         if not retrieved_text.strip():
             st.error("No relevant context was found in the report for this question.")
         else:
-            prompt = f"""
-You are a medical report assistant.
+            # Simple Rate Limiting (Session Based)
+            if "last_request_time" not in st.session_state:
+                st.session_state.last_request_time = 0
+            
+            current_time = time.time()
+            if current_time - st.session_state.last_request_time < 2:  # 2 second cooldown
+                st.warning("⚠️ Slow down! Please wait a moment between requests.")
+            else:
+                st.session_state.last_request_time = current_time
+                
+                prompt = f"""
+You are an expert Medical AI Assistant.
+Your job is to analyze the uploaded medical report and extract the most important information clearly and concisely.
 
-Your job is to explain the uploaded report in simple, patient-friendly language.
-
-Rules:
-- Use only the report context provided below.
-- If the answer is not clearly present in the context, say that the report does not provide enough information.
-- Do not give a diagnosis.
-- Do not suggest medicines.
-- Keep the explanation clear, short, and easy to understand.
-
-Report Context:
+### Context (Medical Report):
 {retrieved_text}
 
-Question:
+### Patient's Question:
 {user_question}
+
+### Instructions for your Response:
+1. **Patient Details First**: ALWAYS start your response with a brief summary of the patient's details if present (Name, Age, Gender, Date) as separate bullet points.
+2. **Important Findings**: Next, provide a strictly organized list of the important test results, abnormal values, or key medical conclusions.
+3. **Concise Descriptions**: Give a very brief, 1-sentence explanation of what each finding means.
+4. **Beautiful Formatting**: Use bold headings (e.g., `### Patient Details`, `### Key Findings`) and clear bullet points.
+5. **No Diagnosis & Strict Context**: Only use the provided context. Do not invent details or diagnose the patient.
 """
 
-            with st.spinner("Generating explanation..."):
-                response = groq_client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-
-            ai_answer = response.choices[0].message.content
-
-            st.subheader("🧠 AI Explanation")
-            st.success(ai_answer)
+                with st.spinner("Analyzing report..."):
+                    stream = groq_client.chat.completions.create(
+                        model="llama-3.1-8b-instant",
+                        messages=[{"role": "user", "content": prompt}],
+                        stream=True
+                    )
+                    
+                    st.subheader("🧠 AI Explanation")
+                    response_placeholder = st.empty()
+                    full_response = ""
+                    
+                    for chunk in stream:
+                        if chunk.choices[0].delta.content:
+                            full_response += chunk.choices[0].delta.content
+                            response_placeholder.markdown(full_response + "▌")
+                    
+                    response_placeholder.markdown(full_response)
 
             with st.expander("Show retrieved context"):
                 st.write(retrieved_text)
