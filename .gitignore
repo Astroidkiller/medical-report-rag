@@ -1,2 +1,14 @@
 .env
 __pycache__/
+chroma_db/
+.chroma_db/
+data/
+.data/
+*.pdf
+.streamlit/
+node_modules/
+dist/
+build/
+.next/
+.vercel/
+.cache/
