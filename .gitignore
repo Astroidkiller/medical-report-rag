@@ -4,6 +4,7 @@ chroma_db/
 .chroma_db/
 data/
 .data/
+community_db/
 *.pdf
 .streamlit/
 node_modules/
