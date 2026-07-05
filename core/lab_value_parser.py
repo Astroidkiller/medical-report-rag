@@ -318,6 +318,8 @@ Each JSON object must have EXACTLY the following keys:
                 continue
         return results
     except Exception as e:
+        import streamlit as st
+        st.error(f"LLM extraction failed: {e}")
         print("LLM fallback failed:", e)
         return []
 
