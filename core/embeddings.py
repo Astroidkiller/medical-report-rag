@@ -49,22 +49,9 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     Returns:
         List of embedding vectors (as lists of floats).
     """
-    if EMBEDDING_BACKEND == "gemini":
-        from core.llm_client import _get_gemini_client
-        client = _get_gemini_client()
-        result = client.models.embed_content(
-            model=EMBEDDING_MODEL,
-            contents=texts,
-        )
-        return [e.values for e in result.embeddings]
-    elif EMBEDDING_BACKEND == "vertex_ai":
-        from core.llm_client import _get_vertex_model
-        client = _get_vertex_model()
-        result = client.models.embed_content(
-            model=EMBEDDING_MODEL,
-            contents=texts,
-        )
-        return [e.values for e in result.embeddings]
+    if EMBEDDING_BACKEND in ("gemini", "vertex_ai"):
+        from core.llm_client import embed_texts_gemini_rest
+        return embed_texts_gemini_rest(texts, model=EMBEDDING_MODEL)
     else:
         model = get_embedding_model()
         embeddings = model.encode(texts)

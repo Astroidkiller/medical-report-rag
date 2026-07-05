@@ -1,10 +1,9 @@
 """
 Unified LLM client for Community Health Intelligence Assistant.
 
-Abstracts the LLM provider so agents don't couple to a specific SDK.
+Uses direct REST API calls to Google Gemini (no SDK dependency issues).
 Supports:
-  - Google Gemini API (simple API-key deploy)
-  - Vertex AI Gemini (GCP)
+  - Google Gemini API (simple API-key deploy) via REST
   - Groq / Llama (fallback, local dev)
 
 Usage:
@@ -17,6 +16,8 @@ Usage:
 
 import os
 import sys
+import json
+import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
@@ -29,61 +30,11 @@ from config import (
 )
 
 # Timeout for LLM calls (seconds)
-_LLM_TIMEOUT = 30
+_LLM_TIMEOUT = 60
 
 # ---------- Provider Clients (lazy singletons) ----------
 
-_gemini_client = None
-_vertex_model = None
 _groq_client = None
-
-
-def _get_gemini_client():
-    """Lazy-init Google Gemini API client."""
-    global _gemini_client
-    if _gemini_client is None:
-        api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
-
-        from google import genai
-        from google.genai import types
-
-        try:
-            _gemini_client = genai.Client(
-                api_key=api_key,
-                http_options=types.HttpOptions(timeout=_LLM_TIMEOUT * 1000),
-            )
-        except (TypeError, AttributeError):
-            _gemini_client = genai.Client(api_key=api_key)
-    return _gemini_client
-
-
-def _get_vertex_model():
-    """Lazy-init Vertex AI Gemini model."""
-    global _vertex_model
-    if _vertex_model is None:
-        if not GCP_PROJECT_ID:
-            raise ValueError("GCP_PROJECT_ID is required when LLM_PROVIDER=vertex_ai")
-
-        from google import genai
-        from google.genai import types
-
-        try:
-            client = genai.Client(
-                vertexai=True,
-                project=GCP_PROJECT_ID,
-                location=GCP_LOCATION,
-                http_options=types.HttpOptions(timeout=_LLM_TIMEOUT * 1000),
-            )
-        except (TypeError, AttributeError):
-            client = genai.Client(
-                vertexai=True,
-                project=GCP_PROJECT_ID,
-                location=GCP_LOCATION,
-            )
-        _vertex_model = client
-    return _vertex_model
 
 
 def _get_groq_client():
@@ -121,10 +72,8 @@ def generate(
     provider = provider or LLM_PROVIDER
     model = model or LLM_MODEL
 
-    if provider == "gemini":
-        return _generate_gemini(prompt, system_prompt, model)
-    elif provider == "vertex_ai":
-        return _generate_vertex(prompt, system_prompt, model)
+    if provider in ("gemini", "vertex_ai"):
+        return _generate_gemini_rest(prompt, system_prompt, model)
     elif provider == "groq":
         return _generate_groq(prompt, system_prompt, model)
     else:
@@ -152,108 +101,152 @@ def generate_stream(
     provider = provider or LLM_PROVIDER
     model = model or LLM_MODEL
 
-    if provider == "gemini":
-        return _stream_gemini(prompt, system_prompt, model)
-    elif provider == "vertex_ai":
-        return _stream_vertex(prompt, system_prompt, model)
+    if provider in ("gemini", "vertex_ai"):
+        return _stream_gemini_rest(prompt, system_prompt, model)
     elif provider == "groq":
         return _stream_groq(prompt, system_prompt, model)
     else:
         raise ValueError(f"Unknown LLM provider: {provider}")
 
 
-# ---------- Google Gemini Implementation ----------
+# ---------- Google Gemini REST Implementation ----------
+
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
-def _generate_gemini(prompt: str, system_prompt: str, model: str) -> str:
-    """Generate with Google Gemini API using google-genai SDK."""
-    client = _get_gemini_client()
-    from google.genai import types
+def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
+    """Generate with Google Gemini API using direct REST calls (no SDK needed)."""
+    api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
 
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt if system_prompt else None,
-        temperature=0.3,
-        max_output_tokens=2048,
-    )
+    url = f"{GEMINI_API_BASE}/{model}:generateContent?key={api_key}"
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=config,
-    )
-    return response.text or ""
+    body = {
+        "contents": [
+            {
+                "parts": [{"text": prompt}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 4096,
+        },
+    }
+
+    if system_prompt:
+        body["systemInstruction"] = {
+            "parts": [{"text": system_prompt}]
+        }
+
+    try:
+        resp = requests.post(url, json=body, timeout=_LLM_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Extract text from response
+        candidates = data.get("candidates", [])
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            if parts:
+                return parts[0].get("text", "")
+        return ""
+
+    except requests.exceptions.HTTPError as e:
+        error_body = ""
+        try:
+            error_body = e.response.json().get("error", {}).get("message", str(e))
+        except Exception:
+            error_body = str(e)
+        raise RuntimeError(f"Gemini API error: {error_body}") from e
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Gemini API request failed: {e}") from e
 
 
-def _stream_gemini(prompt: str, system_prompt: str, model: str):
-    """Stream with Google Gemini API."""
-    client = _get_gemini_client()
-    from google.genai import types
+def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
+    """Stream with Google Gemini API using direct REST calls."""
+    api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
 
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt if system_prompt else None,
-        temperature=0.3,
-        max_output_tokens=2048,
-    )
+    url = f"{GEMINI_API_BASE}/{model}:streamGenerateContent?key={api_key}&alt=sse"
 
-    response = client.models.generate_content_stream(
-        model=model,
-        contents=prompt,
-        config=config,
-    )
+    body = {
+        "contents": [
+            {
+                "parts": [{"text": prompt}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 4096,
+        },
+    }
+
+    if system_prompt:
+        body["systemInstruction"] = {
+            "parts": [{"text": system_prompt}]
+        }
 
     def _chunks():
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        try:
+            resp = requests.post(url, json=body, timeout=_LLM_TIMEOUT, stream=True)
+            resp.raise_for_status()
+
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                json_str = line[6:]  # Remove "data: " prefix
+                if json_str.strip() == "[DONE]":
+                    break
+                try:
+                    chunk_data = json.loads(json_str)
+                    candidates = chunk_data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            text = parts[0].get("text", "")
+                            if text:
+                                yield text
+                except json.JSONDecodeError:
+                    continue
+        except Exception as e:
+            yield f"\n\n[Streaming error: {e}]"
 
     return _chunks()
 
 
-# ---------- Vertex AI Gemini Implementation ----------
+# ---------- Gemini Embeddings via REST ----------
 
 
-def _generate_vertex(prompt: str, system_prompt: str, model: str) -> str:
-    """Generate with Vertex AI Gemini using google-genai SDK."""
-    client = _get_vertex_model()
-    from google.genai import types
+def embed_texts_gemini_rest(texts: list[str], model: str = "text-embedding-004") -> list[list[float]]:
+    """Generate embeddings using Gemini REST API."""
+    api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is required for Gemini embeddings")
 
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt if system_prompt else None,
-        temperature=0.3,
-        max_output_tokens=2048,
-    )
+    url = f"{GEMINI_API_BASE}/{model}:embedContent?key={api_key}"
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=config,
-    )
-    return response.text or ""
+    all_embeddings = []
+    for text in texts:
+        body = {
+            "model": f"models/{model}",
+            "content": {
+                "parts": [{"text": text}]
+            },
+        }
+        try:
+            resp = requests.post(url, json=body, timeout=_LLM_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+            values = data.get("embedding", {}).get("values", [])
+            all_embeddings.append(values)
+        except Exception as e:
+            print(f"Embedding error for text chunk: {e}")
+            # Return zero vector as fallback
+            all_embeddings.append([0.0] * 768)
 
-
-def _stream_vertex(prompt: str, system_prompt: str, model: str):
-    """Stream with Vertex AI Gemini."""
-    client = _get_vertex_model()
-    from google.genai import types
-
-    config = types.GenerateContentConfig(
-        system_instruction=system_prompt if system_prompt else None,
-        temperature=0.3,
-        max_output_tokens=2048,
-    )
-
-    response = client.models.generate_content_stream(
-        model=model,
-        contents=prompt,
-        config=config,
-    )
-
-    def _chunks():
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
-
-    return _chunks()
+    return all_embeddings
 
 
 # ---------- Groq / Llama Fallback ----------
