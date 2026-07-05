@@ -32,6 +32,7 @@ def ingest_report(
     collection_name: str = "medical_report",
     anonymized_region: str = None,
     age_group: str = None,
+    store_vectors: bool = True,
 ) -> dict:
     """
     Full ingestion pipeline for a medical report PDF.
@@ -82,7 +83,7 @@ def ingest_report(
     chunks = chunk_text(raw_text)
 
     # 5. Store in vector DB
-    if chunks:
+    if chunks and store_vectors:
         embeddings = embed_texts(chunks)
         metadata_list = [
             {"report_id": report_id, "filename": filename, "region": anonymized_region}
