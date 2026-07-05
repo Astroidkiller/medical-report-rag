@@ -30,7 +30,7 @@ _RANGE_SEP = r"(?:[-–—]|\bto\b)"
 _PATTERNS = [
     # Pattern: Name ... value unit ... low - high
     re.compile(
-        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.]{2,50}?)\s+"
+        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.\,\']{2,60}?)\s+"
         r"(?P<value>\d+\.?\d*)\s*"
         r"(?P<unit>[A-Za-z%/µμ\.\-]+(?:/[A-Za-z%µμ\.\-]+)?)\s+"
         r"(?P<low>\d+\.?\d*)\s*" + _RANGE_SEP + r"\s*(?P<high>\d+\.?\d*)",
@@ -38,7 +38,7 @@ _PATTERNS = [
     ),
     # Pattern: Name ... value ... low - high ... unit
     re.compile(
-        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.]{2,50}?)\s+"
+        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.\,\']{2,60}?)\s+"
         r"(?P<value>\d+\.?\d*)\s+"
         r"(?P<low>\d+\.?\d*)\s*" + _RANGE_SEP + r"\s*(?P<high>\d+\.?\d*)\s*"
         r"(?P<unit>[A-Za-z%/µμ\.\-]+(?:/[A-Za-z%µμ\.\-]+)?)",
@@ -46,7 +46,7 @@ _PATTERNS = [
     ),
     # Pattern: Name: value unit (low-high)
     re.compile(
-        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.]{2,50}?)\s*[:=]\s*"
+        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.\,\']{2,60}?)\s*[:=]\s*"
         r"(?P<value>\d+\.?\d*)\s*"
         r"(?P<unit>[A-Za-z%/µμ\.\-]+(?:/[A-Za-z%µμ\.\-]+)?)?\s*"
         r"[\(\[]\s*(?P<low>\d+\.?\d*)\s*" + _RANGE_SEP + r"\s*(?P<high>\d+\.?\d*)\s*[\)\]]",
@@ -54,7 +54,7 @@ _PATTERNS = [
     ),
     # Pattern: Name ... value (no ref range, just name and number)
     re.compile(
-        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.]{2,50}?)\s+"
+        r"^(?P<name>[A-Za-z][A-Za-z0-9\s/\-\(\)\.\,\']{2,60}?)\s+"
         r"(?P<value>\d+\.?\d*)\s*"
         r"(?P<unit>[A-Za-z%/µμ\.\-]+(?:/[A-Za-z%µμ\.\-]+)?)",
         re.IGNORECASE,
@@ -156,8 +156,11 @@ def parse_lab_values(text: str) -> list[ExtractedLabValue]:
 
             break  # First matching pattern wins for this line
 
-    return list(seen_tests.values())
+    if not seen_tests:
+        # Fall back to LLM if regex found zero tests
+        return _parse_lab_values_llm(text)
 
+    return list(seen_tests.values())
 
 def parse_lab_values_from_tables(tables: list[list[list[str]]]) -> list[ExtractedLabValue]:
     """
@@ -245,3 +248,56 @@ def parse_lab_values_from_tables(tables: list[list[list[str]]]) -> list[Extracte
             ))
 
     return results
+
+
+def _parse_lab_values_llm(text: str) -> list[ExtractedLabValue]:
+    """Fallback: Use LLM to extract lab values if regex fails."""
+    import sys
+    import os
+    import json
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from core.llm_client import generate
+    
+    prompt = f"""
+You are a medical data extraction assistant. Extract all laboratory test results from the following report text.
+Return ONLY a valid JSON array of objects, with no markdown formatting or extra text.
+Each object must have exactly these keys:
+- "test_name": string (e.g. "Hemoglobin")
+- "value": float (extract numeric value. If the value is '< 0.05', output 0.05. If 'Negative', output 0.0. If unable to convert to float, skip it)
+- "unit": string (e.g. "g/dL", or "" if none)
+- "reference_low": float or null
+- "reference_high": float or null
+- "raw_line": string (the line of text this came from)
+
+Report Text:
+{text[:15000]}
+"""
+    try:
+        response = generate(prompt)
+        response = response.strip()
+        if response.startswith("```json"):
+            response = response[7:]
+        if response.startswith("```"):
+            response = response[3:]
+        if response.endswith("```"):
+            response = response[:-3]
+        
+        data = json.loads(response.strip())
+        results = []
+        for item in data:
+            try:
+                results.append(ExtractedLabValue(
+                    test_name=item["test_name"],
+                    value=float(item["value"]),
+                    unit=item.get("unit", ""),
+                    reference_low=float(item["reference_low"]) if item.get("reference_low") is not None else None,
+                    reference_high=float(item["reference_high"]) if item.get("reference_high") is not None else None,
+                    raw_line=item.get("raw_line", ""),
+                ))
+            except (ValueError, KeyError, TypeError):
+                continue
+        return results
+    except Exception as e:
+        print("LLM fallback failed:", e)
+        return []
+
