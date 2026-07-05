@@ -156,10 +156,6 @@ def parse_lab_values(text: str) -> list[ExtractedLabValue]:
 
             break  # First matching pattern wins for this line
 
-    if not seen_tests:
-        # Fall back to LLM if regex found zero tests
-        return _parse_lab_values_llm(text)
-
     return list(seen_tests.values())
 
 def parse_lab_values_from_tables(tables: list[list[list[str]]]) -> list[ExtractedLabValue]:
@@ -250,27 +246,51 @@ def parse_lab_values_from_tables(tables: list[list[list[str]]]) -> list[Extracte
     return results
 
 
-def _parse_lab_values_llm(text: str) -> list[ExtractedLabValue]:
-    """Fallback: Use LLM to extract lab values if regex fails."""
+def parse_all_lab_values_llm_fallback(text: str, tables: list[list[list[str]]]) -> list[ExtractedLabValue]:
+    """Fallback: Use LLM to extract lab values from both text and tables if regex heuristics fail."""
     import sys
     import os
     import json
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from core.llm_client import generate
     
-    prompt = f"""
-You are a medical data extraction assistant. Extract all laboratory test results from the following report text.
-Return ONLY a valid JSON array of objects, with no markdown formatting or extra text.
-Each object must have exactly these keys:
-- "test_name": string (e.g. "Hemoglobin")
-- "value": float (extract numeric value. If the value is '< 0.05', output 0.05. If 'Negative', output 0.0. If unable to convert to float, skip it)
-- "unit": string (e.g. "g/dL", or "" if none)
-- "reference_low": float or null
-- "reference_high": float or null
-- "raw_line": string (the line of text this came from)
+    # Flatten tables to string representation for LLM
+    table_str = ""
+    for idx, table in enumerate(tables):
+        table_str += f"Table {idx+1}:\n"
+        for row in table:
+            table_str += " | ".join(row) + "\n"
+        table_str += "\n"
 
-Report Text:
-{text[:15000]}
+    prompt = f"""
+You are an expert Clinical Data Extraction AI.
+Your task is to analyze the provided raw text and tables from a medical diagnostic report, and systematically extract every single laboratory test result found.
+
+### EXTRACTION RULES:
+1. **Completeness**: Extract every test result present in the text and tables.
+2. **Numeric Focus**: Extract the numeric value of the test result. 
+   - If the value is '< 0.05', output 0.05. 
+   - If the value is qualitative (e.g., 'Negative', 'Not Detected'), output 0.0.
+   - If the value is a range or cannot be parsed as a float at all, skip it.
+3. **Reference Ranges**: Extract the normal/biological reference range (low and high bounds). If the report does not provide a reference range for a specific test, return null for both bounds.
+
+### OUTPUT FORMAT:
+You MUST return ONLY a valid JSON array of objects. Do not include markdown formatting like ```json or any conversational text.
+Each JSON object must have EXACTLY the following keys:
+- "test_name": string (The name of the test, e.g., "Hemoglobin")
+- "value": float (The extracted numeric value)
+- "unit": string (The unit of measurement, e.g., "g/dL", or "" if none)
+- "reference_low": float or null (The lower bound of the normal range)
+- "reference_high": float or null (The upper bound of the normal range)
+- "raw_line": string (The original line of text or table row this data was extracted from, for source attribution)
+
+### REPORT DATA:
+
+--- RAW TEXT ---
+{text[:12000]}
+
+--- TABLES ---
+{table_str[:12000]}
 """
     try:
         response = generate(prompt)
@@ -300,4 +320,5 @@ Report Text:
     except Exception as e:
         print("LLM fallback failed:", e)
         return []
+
 

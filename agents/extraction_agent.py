@@ -13,7 +13,7 @@ from datetime import datetime
 
 from core.pdf_extractor import extract_text_from_pdf, extract_tables_from_pdf
 from core.chunker import chunk_text
-from core.lab_value_parser import parse_lab_values, parse_lab_values_from_tables
+from core.lab_value_parser import parse_lab_values, parse_lab_values_from_tables, parse_all_lab_values_llm_fallback
 from core.anomaly_detector import flag_all_values, generate_risk_summary
 from core.embeddings import embed_texts, store_chunks, clear_collection
 from data_store.sqlite_store import insert_report, insert_lab_values
@@ -74,6 +74,9 @@ def ingest_report(
         if key not in seen:
             seen[key] = lv
     all_lab_values = list(seen.values())
+
+    if not all_lab_values:
+        all_lab_values = parse_all_lab_values_llm_fallback(raw_text, tables)
 
     # 3. Flag anomalies
     flagged_values = flag_all_values(all_lab_values)
