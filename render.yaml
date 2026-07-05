@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: medical-report-rag
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run streamlit_app.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: EMBEDDING_BACKEND
+        value: local
+      - key: VECTOR_STORE_BACKEND
+        value: chromadb
+      - key: GEMINI_API_KEY
+        sync: false

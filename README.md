@@ -52,7 +52,7 @@ This platform bridges **both gaps** with a single system:
 | Technology Inspiration (from brief) | Our Implementation |
 |---|---|
 | Conversational analytics and NL interfaces | Dual-mode chat: patients + health workers |
-| LLMs and RAG | Groq/Llama-3.1 + ChromaDB vector retrieval |
+| LLMs and RAG | Google Gemini + ChromaDB vector retrieval |
 | Predictive analytics and forecasting | Linear trend projection on abnormal rates |
 | Intelligent data analytics | SQLite aggregate queries by test, region, age group, time |
 | Workflow automation and intelligent applications | 4-agent pipeline (ADK-style) |
@@ -113,7 +113,7 @@ This platform bridges **both gaps** with a single system:
 │  └─────────────────────────────────────────────────┘   │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │              Groq / Llama-3.1 (LLM)                     │   │
+│  │              Google Gemini (LLM)                         │   │
 │  │  (Future: Vertex AI / Gemini for GCP migration)         │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
@@ -152,7 +152,7 @@ Health worker uploads bulk PDFs → Extraction Agent processes each
 | **Embeddings** | SentenceTransformers (all-MiniLM-L6-v2) | Vertex AI Embeddings |
 | **Vector Database** | ChromaDB (in-memory) | Vertex AI Vector Search / AlloyDB |
 | **Structured Data** | SQLite | BigQuery |
-| **LLM** | Groq (llama-3.1-8b-instant) | Vertex AI (Gemini) |
+| **LLM** | Google Gemini (gemini-2.0-flash) | Vertex AI (Gemini) |
 | **Predictive Analytics** | Linear regression (custom) | Vertex AI AutoML / BigQuery ML |
 | **Visualization** | Plotly (in-app) | Looker Studio |
 | **Agent Framework** | Custom Python agents | Agent Development Kit (ADK) |
@@ -214,7 +214,7 @@ This project implements responsible AI principles throughout:
 
 ### Prerequisites
 - Python 3.10+
-- A [Groq API Key](https://console.groq.com/) (free tier available)
+- A Google Gemini API key
 
 ### Setup
 
@@ -227,7 +227,7 @@ cd medical-report-rag
 pip install -r requirements.txt
 
 # Create .env file with your API key
-echo "GROQ_API_KEY=your_api_key_here" > .env
+echo "GEMINI_API_KEY=your_api_key_here" > .env
 
 # Run the application
 python -m streamlit run streamlit_app.py

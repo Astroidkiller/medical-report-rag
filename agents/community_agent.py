@@ -7,8 +7,11 @@ and narrative summaries of community health trends.
 """
 
 import os
-from groq import Groq
-from dotenv import load_dotenv
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core.llm_client import generate
 
 from data_store.sqlite_store import (
     get_top_abnormal_tests,
@@ -24,18 +27,6 @@ from data_store.sqlite_store import (
     forecast_abnormal_trend,
     get_risk_forecast_by_region,
 )
-
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import LLM_MODEL, GROQ_API_KEY
-
-load_dotenv()
-
-
-def _get_groq_client() -> Groq:
-    """Get Groq client with API key and timeout."""
-    api_key = GROQ_API_KEY or os.getenv("GROQ_API_KEY")
-    return Groq(api_key=api_key, timeout=30)
 
 
 def get_dashboard_data(time_period: str = None) -> dict:
@@ -88,8 +79,6 @@ def answer_community_question(query: str, time_period: str = None) -> dict:
         Dict with 'answer' (narrative text), 'data' (supporting data),
         and 'data_summary' (formatted data context).
     """
-    client = _get_groq_client()
-
     # Gather relevant data
     data = get_dashboard_data(time_period)
 
@@ -133,9 +122,9 @@ def answer_community_question(query: str, time_period: str = None) -> dict:
                            f"Projected {rf['projected_rate']}% ({rf['trend_direction']}, "
                            f"risk: {rf['risk_level']})\n")
 
-    prompt = f"""You are a Community Health Intelligence Assistant helping health workers and clinic administrators understand population-level health trends.
+    system_prompt = "You are a Community Health Intelligence Assistant helping health workers and clinic administrators understand population-level health trends."
 
-{data_context}
+    prompt = f"""{data_context}
 
 Health Worker's Question:
 {query}
@@ -151,11 +140,7 @@ Instructions:
 """
 
     try:
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        answer = response.choices[0].message.content
+        answer = generate(prompt, system_prompt=system_prompt)
     except Exception:
         answer = (
             "⚠️ Unable to generate community analysis at this time. "

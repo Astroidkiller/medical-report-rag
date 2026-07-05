@@ -2,17 +2,75 @@
 
 ## Overview
 
-The Community Health Intelligence Assistant uses a **dual-mode architecture** with a **multi-agent pipeline** to serve both individual patients and community health stakeholders from the same platform.
+The Community Health Intelligence Assistant is a **multi-agent RAG platform** that transforms individual medical report PDFs into **population-level health intelligence**. It serves both individual patients and community health stakeholders (clinics, ASHA workers, local health departments).
+
+### Key Capabilities
+- **Report Ingestion**: PDF → structured lab values → anomaly flags → vector + SQL storage
+- **Anomaly Detection**: Individual-level flagging + population-level trend analysis
+- **RAG-based Q&A**: Semantic search + LLM explanation for patient reports
+- **Community Intelligence**: Aggregate analytics, demographic clustering, seasonal spike detection
+- **Multi-Agent Pipeline**: ADK-style orchestration with 4 specialized agents
+
+---
+
+## Technology Stack
+
+```
+┌─────────────────── PRIMARY (GCP) ──────────────────┐
+│                                                     │
+│  CLI (app.py)                                       │
+│     → pdfplumber (PDF extraction)                   │
+│     → Vertex AI Gemini (LLM — gemini-2.0-flash)    │
+│     → SentenceTransformers / Vertex AI Embeddings   │
+│     → ChromaDB / AlloyDB pgvector (vector search)   │
+│     → SQLite (structured lab values & aggregates)   │
+│     → Multi-Agent Orchestrator (ADK-style)          │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+                    │
+             GCP Migration Path
+                    │
+                    ▼
+┌─────────────────── TARGET (GCP Full) ───────────────┐
+│                                                      │
+│  Cloud Run (API)                                     │
+│     → Document AI (PDF processing)                   │
+│     → Vertex AI Embeddings (text-embedding-005)      │
+│     → AlloyDB pgvector (vector search)               │
+│     → BigQuery (structured lab values)               │
+│     → Vertex AI Gemini (LLM)                         │
+│     → Looker Studio (dashboards)                     │
+│     → Agent Development Kit (ADK)                    │
+│                                                      │
+│  Cloud Pub/Sub → Cloud Functions (alert triggers)    │
+│  Cloud IAM → per-clinic access control               │
+│  Cloud Healthcare API → FHIR integration             │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+### Backend Switching
+
+The system supports dual-mode operation via environment variables:
+
+| Component | Local (Dev) | GCP (Production) |
+|---|---|---|
+| **LLM** | Google Gemini 2.0 Flash | Vertex AI Gemini 2.0 Flash |
+| **Embeddings** | SentenceTransformers (all-MiniLM-L6-v2) | Vertex AI Embeddings (text-embedding-005) |
+| **Vector Store** | ChromaDB (ephemeral) | AlloyDB pgvector |
+| **Structured Data** | SQLite | BigQuery |
 
 ---
 
 ## Agent Architecture (ADK-Style)
 
-The system is decomposed into four specialized agents, each with a clear responsibility boundary. This mirrors the Agent Development Kit (ADK) pattern for production migration.
+The system uses four specialized agents coordinated by a central orchestrator. Each agent has a clear input/output contract and can be independently tested.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     AGENT ORCHESTRATION                      │
+│                   ORCHESTRATOR (orchestrator.py)              │
+│                                                              │
+│   Session state: report_ids, risk_cards, anomalies           │
 │                                                              │
 │  ┌──────────────────┐    ┌──────────────────┐              │
 │  │ EXTRACTION AGENT │    │    QA AGENT       │              │
@@ -28,12 +86,25 @@ The system is decomposed into four specialized agents, each with a clear respons
 │  │   RISK AGENT     │    │ COMMUNITY AGENT  │              │
 │  │                  │    │                   │              │
 │  │ • Risk Scoring   │    │ • Aggregate Query │              │
-│  │ • Risk Cards     │    │ • NL → SQL        │              │
+│  │ • Risk Cards     │    │ • NL → Insights   │              │
 │  │ • LLM Explain    │    │ • Trend Analysis  │              │
 │  │ • Severity Map   │    │ • Alert Generate  │              │
 │  └──────────────────┘    └──────────────────┘              │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### Pipeline Flows
+
+**Patient Pipeline**: `Ingest → Risk Analysis → QA`
+```
+PDF Upload → Extraction Agent → Risk Agent → QA Agent (interactive)
+```
+
+**Community Pipeline**: `Batch Ingest → Population Analysis → Community Q&A`
+```
+Multiple PDFs → Extraction Agent (batch) → Risk Agent (batch)
+    → Population Anomaly Detection → Community Agent (interactive)
 ```
 
 ---
@@ -68,54 +139,11 @@ The system is decomposed into four specialized agents, each with a clear respons
     └───────────────┘     └──────────────────┘
 ```
 
-### Why Two Stores?
-
-| Store | Purpose | Query Pattern |
-|---|---|---|
-| **ChromaDB** | Semantic similarity search for RAG | "Find report sections about hemoglobin" → vector similarity |
-| **SQLite** | Structured aggregate analysis | "What % of reports show elevated HbA1c?" → SQL GROUP BY |
-
-Both are populated by the **Extraction Agent** at ingestion time. ChromaDB enables the patient-facing Q&A (unstructured), while SQLite enables the community-facing analytics (structured).
-
----
-
-## GCP Migration Architecture
-
-The current demo stack maps cleanly to GCP services for production scale:
-
-```
-┌────────────────── CURRENT (Demo) ──────────────────┐
-│                                                     │
-│  Streamlit → pdfplumber → SentenceTransformer      │
-│     → ChromaDB → SQLite → Groq/Llama-3.1          │
-│     → Plotly (in-app charts)                       │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-                        │
-                   Migration
-                        │
-                        ▼
-┌────────────────── TARGET (GCP) ─────────────────────┐
-│                                                      │
-│  Cloud Run (Streamlit)                               │
-│     → Document AI (PDF processing)                   │
-│     → Vertex AI Embeddings                           │
-│     → Vertex AI Vector Search / AlloyDB              │
-│     → BigQuery (structured lab values)               │
-│     → Vertex AI Gemini (LLM)                         │
-│     → Looker Studio (dashboards)                     │
-│     → Agent Development Kit (ADK)                    │
-│                                                      │
-│  Cloud Pub/Sub → Cloud Functions (alert triggers)    │
-│  Cloud IAM → per-clinic access control               │
-│  Cloud Healthcare API → FHIR integration             │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-```
-
 ---
 
 ## Anomaly Detection Pipeline
+
+### Individual-Level (per report)
 
 ```
 Lab Value Extracted
@@ -144,20 +172,30 @@ Lab Value Extracted
 └────────┬────────────┘
          │
          ▼
-┌─────────────────────┐
-│ Risk Score           │
-│                      │
-│ (2×critical + 1×abn) │
-│ ────────────────────  │
-│     total_known       │
-└────────┬────────────┘
+    Risk Score & Card
+```
+
+### Population-Level (across reports) — NEW
+
+```
+All Lab Records (SQLite)
          │
-    ┌────┴────┐
-    ▼         ▼
-Individual   Aggregate
-Risk Card    Community
-(Patient)    Alerts
-             (Dashboard)
+    ┌────┼────────────────┐
+    ▼    ▼                ▼
+┌────────┐  ┌──────────┐  ┌────────────────┐
+│Elevated│  │ Seasonal │  │ Demographic    │
+│Rate    │  │ Spikes   │  │ Clusters       │
+│        │  │          │  │                │
+│ % abn. │  │ Current  │  │ age × region   │
+│ > 25%  │  │ vs hist  │  │ cross-tab      │
+│ by test│  │ > 1.5x   │  │ > 35% abnormal │
+└────────┘  └──────────┘  └────────────────┘
+    │            │                │
+    └────────────┼────────────────┘
+                 ▼
+    Population Anomaly Alerts
+    → Community Dashboard
+    → Health Worker Recommendations
 ```
 
 ---
@@ -186,3 +224,28 @@ Risk Card    Community
 ```
 
 Every answer passes through all three layers before reaching the user.
+
+---
+
+## LLM Client Architecture
+
+The unified LLM client (`core/llm_client.py`) abstracts provider-specific SDKs:
+
+```
+┌─────────────────────────────────┐
+│      core/llm_client.py         │
+│                                 │
+│  generate(prompt, system)       │
+│  generate_stream(prompt, sys)   │
+│                                 │
+│  ┌─────────┐    ┌──────────┐  │
+│  │ Gemini  │    │Vertex AI │  │
+│  │ Gemini  │    │ (fallback│  │
+│  │         │    │  for dev)│  │
+│  └─────────┘    └──────────┘  │
+└─────────────────────────────────┘
+         ▲
+         │
+    All 4 agents import from here
+    (no direct SDK coupling)
+```

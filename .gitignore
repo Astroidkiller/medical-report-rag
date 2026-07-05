@@ -6,7 +6,7 @@ data/
 .data/
 community_db/
 *.pdf
-.streamlit/
+.streamlit/secrets.toml
 node_modules/
 dist/
 build/

@@ -256,3 +256,261 @@ def generate_risk_summary(flagged_values: list[FlaggedValue]) -> dict:
         "risk_score": compute_risk_score(flagged_values),
         "top_concerns": top_concerns,
     }
+
+
+# ============================================================
+# Population-Level Anomaly Detection
+# ============================================================
+# These functions operate on aggregate data from SQLite,
+# surfacing community-wide health trends and demographic patterns.
+
+
+@dataclass
+class PopulationAnomaly:
+    """A population-level anomaly detected across aggregated reports."""
+    anomaly_type: str       # "elevated_rate", "seasonal_spike", "demographic_cluster"
+    test_name: str
+    metric: float           # The abnormal rate or spike magnitude
+    threshold: float        # The threshold that was exceeded
+    region: str | None
+    age_group: str | None
+    severity: str           # "warning" or "critical"
+    message: str
+    details: dict           # Supporting data for the anomaly
+
+
+def _text_or_default(row: dict, key: str, default: str) -> str:
+    """Return default for missing, None, or empty-string schema values."""
+    value = row.get(key)
+    if value is None:
+        return default
+    value = str(value).strip()
+    return value if value else default
+
+
+def detect_population_anomalies(
+    lab_data: list[dict],
+    threshold_pct: float = 25.0,
+    critical_pct: float = 45.0,
+) -> list[PopulationAnomaly]:
+    """
+    Detect population-level anomalies from aggregate lab value data.
+
+    Flags tests where the abnormal rate across the population exceeds
+    the given threshold, broken down by region and age group.
+
+    Args:
+        lab_data: List of dicts with keys: test_name, flag, anonymized_region, age_group.
+        threshold_pct: Minimum abnormal % to trigger a warning.
+        critical_pct: Minimum abnormal % to trigger a critical alert.
+
+    Returns:
+        List of PopulationAnomaly objects sorted by severity then metric.
+    """
+    from collections import defaultdict
+
+    # Aggregate by test_name
+    test_counts = defaultdict(lambda: {"total": 0, "abnormal": 0})
+    for row in lab_data:
+        key = _text_or_default(row, "test_name", "").lower()
+        flag = _text_or_default(row, "flag", "UNKNOWN")
+        if not key:
+            continue
+        if flag == "UNKNOWN":
+            continue
+        test_counts[key]["total"] += 1
+        if flag not in ("NORMAL", "UNKNOWN"):
+            test_counts[key]["abnormal"] += 1
+
+    anomalies = []
+    for test_name, counts in test_counts.items():
+        if counts["total"] == 0:
+            continue
+        rate = (counts["abnormal"] / counts["total"]) * 100
+
+        if rate >= threshold_pct:
+            severity = "critical" if rate >= critical_pct else "warning"
+            anomalies.append(PopulationAnomaly(
+                anomaly_type="elevated_rate",
+                test_name=test_name,
+                metric=round(rate, 1),
+                threshold=critical_pct if severity == "critical" else threshold_pct,
+                region=None,
+                age_group=None,
+                severity=severity,
+                message=(
+                    f"{'🔴' if severity == 'critical' else '🟡'} {test_name}: "
+                    f"{rate:.1f}% abnormal rate across population "
+                    f"({counts['abnormal']}/{counts['total']} values)"
+                ),
+                details=counts,
+            ))
+
+    anomalies.sort(key=lambda a: (-{"critical": 2, "warning": 1}.get(a.severity, 0), -a.metric))
+    return anomalies
+
+
+def detect_seasonal_spikes(
+    current_period_data: list[dict],
+    historical_data: list[dict],
+    spike_factor: float = 1.5,
+) -> list[PopulationAnomaly]:
+    """
+    Detect seasonal illness spikes by comparing current period abnormal rates
+    to historical averages.
+
+    A spike is flagged when current_rate > historical_avg * spike_factor.
+
+    Args:
+        current_period_data: Lab value records from the current period.
+        historical_data: Lab value records from the comparison period.
+        spike_factor: Multiplier above which a spike is flagged (default 1.5x).
+
+    Returns:
+        List of PopulationAnomaly objects for detected seasonal spikes.
+    """
+    from collections import defaultdict
+
+    def _compute_rates(data):
+        counts = defaultdict(lambda: {"total": 0, "abnormal": 0})
+        for row in data:
+            key = _text_or_default(row, "test_name", "").lower()
+            flag = _text_or_default(row, "flag", "UNKNOWN")
+            if not key:
+                continue
+            if flag == "UNKNOWN":
+                continue
+            counts[key]["total"] += 1
+            if flag not in ("NORMAL", "UNKNOWN"):
+                counts[key]["abnormal"] += 1
+        rates = {}
+        for k, v in counts.items():
+            if v["total"] > 0:
+                rates[k] = (v["abnormal"] / v["total"]) * 100
+        return rates
+
+    current_rates = _compute_rates(current_period_data)
+    historical_rates = _compute_rates(historical_data)
+
+    anomalies = []
+    for test_name, current_rate in current_rates.items():
+        hist_rate = historical_rates.get(test_name)
+        if hist_rate is None:
+            continue
+
+        # Zero baseline: any current abnormals represent a new emergence
+        if hist_rate == 0:
+            if current_rate > 0:
+                anomalies.append(PopulationAnomaly(
+                    anomaly_type="seasonal_spike",
+                    test_name=test_name,
+                    metric=round(current_rate, 1),
+                    threshold=0.0,
+                    region=None,
+                    age_group=None,
+                    severity="critical",
+                    message=(
+                        f"🆕 New emergence: {test_name} abnormal rate rose from "
+                        f"0% to {current_rate:.1f}% (previously unseen)"
+                    ),
+                    details={
+                        "current_rate": round(current_rate, 1),
+                        "historical_rate": 0.0,
+                        "spike_magnitude": float("inf"),
+                    },
+                ))
+            continue
+
+        if current_rate > hist_rate * spike_factor:
+            spike_magnitude = current_rate / hist_rate
+            severity = "critical" if spike_magnitude >= 2.0 else "warning"
+            anomalies.append(PopulationAnomaly(
+                anomaly_type="seasonal_spike",
+                test_name=test_name,
+                metric=round(current_rate, 1),
+                threshold=round(hist_rate * spike_factor, 1),
+                region=None,
+                age_group=None,
+                severity=severity,
+                message=(
+                    f"📈 Seasonal spike: {test_name} abnormal rate is "
+                    f"{current_rate:.1f}% vs historical {hist_rate:.1f}% "
+                    f"({spike_magnitude:.1f}x increase)"
+                ),
+                details={
+                    "current_rate": round(current_rate, 1),
+                    "historical_rate": round(hist_rate, 1),
+                    "spike_magnitude": round(spike_magnitude, 2),
+                },
+            ))
+
+    anomalies.sort(key=lambda a: -a.metric)
+    return anomalies
+
+
+def detect_demographic_clusters(
+    lab_data: list[dict],
+    cluster_threshold_pct: float = 35.0,
+    min_samples: int = 3,
+) -> list[PopulationAnomaly]:
+    """
+    Detect demographic clusters — specific age_group × region combinations
+    with disproportionately high abnormal rates.
+
+    Args:
+        lab_data: Lab value records with region and age_group fields.
+        cluster_threshold_pct: Minimum abnormal % for a cluster to be flagged.
+        min_samples: Minimum number of samples in a group to be considered.
+
+    Returns:
+        List of PopulationAnomaly objects for demographic clusters.
+    """
+    from collections import defaultdict
+
+    # Aggregate by (test_name, region, age_group)
+    groups = defaultdict(lambda: {"total": 0, "abnormal": 0})
+    for row in lab_data:
+        test = _text_or_default(row, "test_name", "").lower()
+        region = _text_or_default(row, "anonymized_region", "Unknown")
+        age = _text_or_default(row, "age_group", "Unknown")
+        flag = _text_or_default(row, "flag", "UNKNOWN")
+        if not test:
+            continue
+        if flag == "UNKNOWN":
+            continue
+
+        key = (test, region, age)
+        groups[key]["total"] += 1
+        if flag not in ("NORMAL", "UNKNOWN"):
+            groups[key]["abnormal"] += 1
+
+    anomalies = []
+    for (test_name, region, age_group), counts in groups.items():
+        if counts["total"] < min_samples:
+            continue
+        rate = (counts["abnormal"] / counts["total"]) * 100
+
+        if rate >= cluster_threshold_pct:
+            severity = "critical" if rate >= 60.0 else "warning"
+            anomalies.append(PopulationAnomaly(
+                anomaly_type="demographic_cluster",
+                test_name=test_name,
+                metric=round(rate, 1),
+                threshold=cluster_threshold_pct,
+                region=region,
+                age_group=age_group,
+                severity=severity,
+                message=(
+                    f"👥 Demographic cluster: {test_name} — {rate:.1f}% abnormal "
+                    f"in {age_group} / {region} "
+                    f"({counts['abnormal']}/{counts['total']} values)"
+                ),
+                details={
+                    "region": region,
+                    "age_group": age_group,
+                    **counts,
+                },
+            ))
+
+    anomalies.sort(key=lambda a: (-{"critical": 2, "warning": 1}.get(a.severity, 0), -a.metric))
+    return anomalies

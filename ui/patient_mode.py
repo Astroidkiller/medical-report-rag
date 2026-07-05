@@ -239,7 +239,14 @@ def render_patient_mode():
                 # Stream the response
                 placeholder = st.empty()
                 for chunk in response["answer"]:
-                    delta = getattr(chunk.choices[0].delta, "content", None) if chunk.choices else None
+                    if isinstance(chunk, str):
+                        delta = chunk
+                    else:
+                        choices = getattr(chunk, "choices", None)
+                        delta = (
+                            getattr(choices[0].delta, "content", None)
+                            if choices else None
+                        )
                     if delta:
                         full_response += delta
                         placeholder.markdown(full_response + "▌")

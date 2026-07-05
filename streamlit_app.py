@@ -57,7 +57,7 @@ with st.sidebar:
         departments) understand health data and make better decisions.
 
         **Built with:**
-        - 🤖 Groq / Llama-3.1 (LLM)
+        - 🤖 Google Gemini (LLM)
         - 📊 ChromaDB (Vector Search)
         - 🧬 SentenceTransformers (Embeddings)
         - 📈 Plotly (Visualizations)

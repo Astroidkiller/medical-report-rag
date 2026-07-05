@@ -1,5 +1,12 @@
 """
 Centralized configuration for Community Health Intelligence Assistant.
+
+Supports multiple deployment modes:
+  - Gemini API key mode: Google Gemini + ChromaDB
+  - GCP mode: Vertex AI Gemini + AlloyDB pgvector
+  - Local fallback mode: Groq/Llama + ChromaDB
+
+Set LLM_PROVIDER and VECTOR_STORE_BACKEND via .env or environment variables.
 """
 
 import os
@@ -7,14 +14,52 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ---------- GOOGLE / GCP CONFIGURATION ----------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
+GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
+
 # ---------- LLM CONFIGURATION ----------
-LLM_MODEL = "llama-3.1-8b-instant"
-LLM_PROVIDER = "groq"  # Future: "vertex_ai" for Gemini migration
+# Provider: "gemini" (API key), "vertex_ai" (GCP), or "groq" (fallback)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
+
+# Model names per provider
+LLM_MODELS = {
+    "gemini": "gemini-2.0-flash",
+    "vertex_ai": "gemini-2.0-flash",
+    "groq": "llama-3.1-8b-instant",
+}
+LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, "gemini-2.0-flash")
+
+# Groq fallback API key (only needed when LLM_PROVIDER=groq)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # ---------- EMBEDDING CONFIGURATION ----------
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-EMBEDDING_DIMENSION = 384
+# Backend: "vertex_ai" or "local" (SentenceTransformers)
+EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "local")
+
+EMBEDDING_MODELS = {
+    "vertex_ai": "text-embedding-005",
+    "local": "all-MiniLM-L6-v2",
+}
+EMBEDDING_MODEL = EMBEDDING_MODELS.get(EMBEDDING_BACKEND, "all-MiniLM-L6-v2")
+
+EMBEDDING_DIMENSIONS = {
+    "vertex_ai": 768,
+    "local": 384,
+}
+EMBEDDING_DIMENSION = EMBEDDING_DIMENSIONS.get(EMBEDDING_BACKEND, 384)
+
+# ---------- VECTOR STORE CONFIGURATION ----------
+# Backend: "chromadb" (local) or "alloydb" (GCP)
+VECTOR_STORE_BACKEND = os.getenv("VECTOR_STORE_BACKEND", "chromadb")
+
+# AlloyDB connection (only needed when VECTOR_STORE_BACKEND=alloydb)
+ALLOYDB_HOST = os.getenv("ALLOYDB_HOST", "")
+ALLOYDB_PORT = os.getenv("ALLOYDB_PORT", "5432")
+ALLOYDB_DB = os.getenv("ALLOYDB_DB", "health_intelligence")
+ALLOYDB_USER = os.getenv("ALLOYDB_USER", "")
+ALLOYDB_PASSWORD = os.getenv("ALLOYDB_PASSWORD", "")
 
 # ---------- CHUNKING CONFIGURATION ----------
 CHUNK_MAX_CHARS = 300

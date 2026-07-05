@@ -6,24 +6,15 @@ and provides plain-language explanations of findings.
 """
 
 import os
-from groq import Groq
-from dotenv import load_dotenv
+import sys
+import logging
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.anomaly_detector import FlaggedValue, FLAG_NORMAL, FLAG_UNKNOWN
+from core.llm_client import generate
 
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import LLM_MODEL, GROQ_API_KEY
-
-load_dotenv()
-
-_LLM_TIMEOUT = 30
-
-
-def _get_groq_client() -> Groq:
-    """Get Groq client with API key and timeout."""
-    api_key = GROQ_API_KEY or os.getenv("GROQ_API_KEY")
-    return Groq(api_key=api_key, timeout=_LLM_TIMEOUT)
+logger = logging.getLogger(__name__)
 
 
 def generate_risk_card(flagged_values: list[FlaggedValue], risk_summary: dict) -> dict:
@@ -121,7 +112,6 @@ def generate_risk_explanation(risk_card: dict) -> str:
     Returns:
         Plain-language risk explanation string.
     """
-    client = _get_groq_client()
 
     # Build a concise context from the risk card
     findings_text = ""
@@ -148,12 +138,9 @@ End with a recommendation about which type of specialist to consult, if applicab
 Always include the disclaimer that this is AI-generated and not medical advice."""
 
     try:
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content
+        return generate(prompt)
     except Exception:
+        logger.exception("Risk explanation generation failed")
         return (
             "⚠️ Unable to generate a detailed risk explanation at this time. "
             "Please review the risk card above for a summary of findings, "

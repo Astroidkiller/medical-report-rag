@@ -550,5 +550,92 @@ def get_risk_forecast_by_region(days_ahead: int = 30) -> list[dict]:
     return forecasts
 
 
+# ---------- POPULATION ANOMALY QUERIES ----------
+
+def get_all_lab_records(time_period: str = None) -> list[dict]:
+    """
+    Get all lab value records as dicts for population-level anomaly detection.
+
+    Args:
+        time_period: Optional ISO date string filter (>= this date).
+
+    Returns:
+        List of dicts with test_name, value, unit, flag, severity,
+        anonymized_region, age_group, timestamp.
+    """
+    with get_connection() as conn:
+        where_clause = ""
+        params = []
+        if time_period:
+            where_clause = "WHERE timestamp >= ?"
+            params.append(time_period)
+
+        rows = conn.execute(f"""
+            SELECT test_name, value, unit, flag, severity,
+                   anonymized_region, age_group, timestamp
+            FROM lab_values
+            {where_clause}
+            ORDER BY timestamp
+        """, params).fetchall()
+
+        return [dict(row) for row in rows]
+
+
+def get_lab_records_by_period(start_date: str, end_date: str) -> list[dict]:
+    """
+    Get lab value records within a specific date range.
+
+    Args:
+        start_date: ISO date string for range start.
+        end_date: ISO date string for range end.
+
+    Returns:
+        List of lab value dicts.
+    """
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT test_name, value, unit, flag, severity,
+                   anonymized_region, age_group, timestamp
+            FROM lab_values
+            WHERE timestamp >= ? AND timestamp < ?
+            ORDER BY timestamp
+        """, [start_date, end_date]).fetchall()
+
+        return [dict(row) for row in rows]
+
+
+def get_demographic_cross_tab(time_period: str = None) -> list[dict]:
+    """
+    Get cross-tabulated abnormal rates by test × region × age_group.
+
+    Returns:
+        List of dicts with test_name, region, age_group, total, abnormal, rate.
+    """
+    with get_connection() as conn:
+        where_clause = "WHERE flag != 'UNKNOWN'"
+        params = []
+        if time_period:
+            where_clause += " AND timestamp >= ?"
+            params.append(time_period)
+
+        rows = conn.execute(f"""
+            SELECT
+                test_name,
+                anonymized_region as region,
+                age_group,
+                COUNT(*) as total,
+                SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal,
+                ROUND(SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END)
+                    * 100.0 / COUNT(*), 1) as rate
+            FROM lab_values
+            {where_clause}
+            GROUP BY test_name, anonymized_region, age_group
+            HAVING total >= 3
+            ORDER BY rate DESC
+        """, params).fetchall()
+
+        return [dict(row) for row in rows]
+
+
 # Initialize DB on module import
 init_db()
