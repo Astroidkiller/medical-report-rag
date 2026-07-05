@@ -114,6 +114,13 @@ def generate_stream(
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
+def _mask_api_key(text: str) -> str:
+    """Mask the API key in any error messages to prevent exposing it in the UI."""
+    import re
+    # Matches key=... or ?key=... or key: ... up to next parameter or boundary
+    return re.sub(r"key=[A-Za-z0-9_\-]+", "key=REDACTED", text)
+
+
 def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
     """Generate with Google Gemini API using direct REST calls (no SDK needed)."""
     api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
@@ -158,9 +165,10 @@ def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
             error_body = e.response.json().get("error", {}).get("message", str(e))
         except Exception:
             error_body = str(e)
-        raise RuntimeError(f"Gemini API error: {error_body}") from e
+        raise RuntimeError(_mask_api_key(f"Gemini API error: {error_body}")) from e
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Gemini API request failed: {e}") from e
+        raise RuntimeError(_mask_api_key(f"Gemini API request failed: {e}")) from e
+
 
 
 def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
@@ -211,7 +219,7 @@ def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
                 except json.JSONDecodeError:
                     continue
         except Exception as e:
-            yield f"\n\n[Streaming error: {e}]"
+            yield f"\n\n[Streaming error: {_mask_api_key(str(e))}]"
 
     return _chunks()
 
