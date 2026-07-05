@@ -170,6 +170,7 @@ def _render_bulk_upload():
                             collection_name="community_reports",
                             anonymized_region=selected_region,
                             age_group=selected_age,
+                            store_vectors=False,
                         )
                         st.write(
                             f"Done: {result['risk_summary']['total']} tests, "

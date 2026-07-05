@@ -69,10 +69,8 @@ def render_patient_mode():
 
     if not st.session_state.get("patient_ingestion_results"):
         from agents.extraction_agent import ingest_report
-        from core.embeddings import clear_collection
 
         with st.status("Analyzing report files...", expanded=True):
-            clear_collection(collection_name)
             results = []
 
             session_dir = os.path.join(
@@ -89,22 +87,29 @@ def render_patient_mode():
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
 
-                result = ingest_report(
-                    file_path=file_path,
-                    filename=safe_name,
-                    mode="patient",
-                    collection_name=collection_name,
-                )
-                results.append(result)
-                st.write(
-                    f"Done: {result['risk_summary']['total']} tests, "
-                    f"{result['risk_summary']['abnormal']} abnormal, "
-                    f"{result['risk_summary']['critical']} critical"
-                )
+                try:
+                    result = ingest_report(
+                        file_path=file_path,
+                        filename=safe_name,
+                        mode="patient",
+                        collection_name=collection_name,
+                        store_vectors=False,
+                    )
+                    results.append(result)
+                    st.write(
+                        f"Done: {result['risk_summary']['total']} tests, "
+                        f"{result['risk_summary']['abnormal']} abnormal, "
+                        f"{result['risk_summary']['critical']} critical"
+                    )
+                except Exception as exc:
+                    st.error(f"Could not process {safe_name}: {exc}")
 
             st.session_state.patient_ingestion_results = results
 
     results = st.session_state.patient_ingestion_results
+    if not results:
+        st.warning("No reports were processed successfully. Please try another PDF.")
+        return
 
     total_tests = sum(r["risk_summary"]["total"] for r in results)
     total_abnormal = sum(r["risk_summary"]["abnormal"] for r in results)
@@ -130,14 +135,16 @@ def render_patient_mode():
             render_risk_card(risk_card)
 
             report_key = f"report_{idx}"
-            if report_key not in st.session_state.patient_risk_explanations:
+            st.markdown("### Lab Values")
+            render_lab_values_grid(result["flagged_values"])
+
+            if st.button("Generate patient-friendly explanation", key=f"risk_expl_{idx}"):
                 with st.spinner("Generating patient-friendly risk assessment..."):
                     explanation = generate_risk_explanation(risk_card)
                     st.session_state.patient_risk_explanations[report_key] = explanation
 
-            st.markdown(st.session_state.patient_risk_explanations[report_key])
-            st.markdown("### Lab Values")
-            render_lab_values_grid(result["flagged_values"])
+            if report_key in st.session_state.patient_risk_explanations:
+                st.markdown(st.session_state.patient_risk_explanations[report_key])
 
     _render_patient_chat(results, collection_name)
     _render_export()
