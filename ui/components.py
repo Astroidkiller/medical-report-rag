@@ -93,8 +93,9 @@ def render_lab_value_card(fv: FlaggedValue):
 def render_lab_values_grid(flagged_values: list[FlaggedValue]):
     """Render lab values in a responsive grid layout."""
     displayable = [fv for fv in flagged_values if fv.flag != "UNKNOWN"]
+    unknown = [fv for fv in flagged_values if fv.flag == "UNKNOWN"]
 
-    if not displayable:
+    if not displayable and not unknown:
         st.info("No lab values could be extracted and assessed from this report.")
         return
 
@@ -114,6 +115,14 @@ def render_lab_values_grid(flagged_values: list[FlaggedValue]):
             for i, fv in enumerate(normal):
                 with cols[i % 3]:
                     render_lab_value_card(fv)
+
+    if unknown:
+        with st.expander(f"Other Extracted Values ({len(unknown)}) - No Reference Range Available"):
+            cols = st.columns(min(len(unknown), 3))
+            for i, fv in enumerate(unknown):
+                with cols[i % 3]:
+                    render_lab_value_card(fv)
+
 
 
 def render_source_evidence(source_chunks: list[str], source_metadata: list[dict] = None):

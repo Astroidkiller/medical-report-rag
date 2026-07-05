@@ -199,6 +199,10 @@ REFERENCE_RANGES = {
     "bnp": (0, 100, "pg/mL", 0, 5000),
     "crp": (0, 3.0, "mg/L", 0, 100),
     "hs-crp": (0, 3.0, "mg/L", 0, 100),
+
+    # Immunosuppressants
+    "tacrolimus": (3.0, 15.0, "ug/L", 1.5, 20.0),
+    "tacrolimus (fk-506), whole blood": (3.0, 15.0, "ug/L", 1.5, 20.0),
 }
 
 # ---------- SIMULATED DEMOGRAPHICS ----------
