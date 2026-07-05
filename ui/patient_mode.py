@@ -129,6 +129,16 @@ def render_patient_mode():
     col3.metric("Abnormal", total_abnormal)
     col4.metric("Critical", total_critical)
 
+    if total_tests == 0:
+        with st.expander("🔍 Diagnostic Debug Info (Why did it find 0 tests?)", expanded=True):
+            st.warning("No tests were extracted. Here is the raw data extracted from the PDF to help us diagnose:")
+            for r in results:
+                st.write(f"**Filename:** `{r['filename']}`")
+                st.write(f"**Text Length:** {len(r.get('raw_text', ''))} characters")
+                st.write(f"**First 1000 characters of text:**")
+                st.code(r.get('raw_text', '')[:1000] if r.get('raw_text') else "[Empty Text]")
+
+
     if "patient_risk_explanations" not in st.session_state:
         st.session_state.patient_risk_explanations = {}
 
