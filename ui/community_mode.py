@@ -10,9 +10,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from agents.community_agent import answer_community_question, get_dashboard_data
-from agents.extraction_agent import ingest_report
-from data_store.sqlite_store import forecast_abnormal_trend, get_risk_forecast_by_region, get_test_trend
 from ui.components import render_community_alert, render_metric_card
 
 
@@ -62,6 +59,8 @@ def render_community_mode():
     _render_bulk_upload()
 
     if "community_dashboard_data" not in st.session_state or st.session_state.community_dashboard_data is None:
+        from agents.community_agent import get_dashboard_data
+
         st.session_state.community_dashboard_data = get_dashboard_data()
 
     data = st.session_state.community_dashboard_data
@@ -75,6 +74,8 @@ def render_community_mode():
         st.markdown("### Population Snapshot")
     with refresh_col:
         if st.button("Refresh", key="refresh_dash", use_container_width=True):
+            from agents.community_agent import get_dashboard_data
+
             st.session_state.community_dashboard_data = get_dashboard_data()
             data = st.session_state.community_dashboard_data
 
@@ -137,6 +138,8 @@ def _render_bulk_upload():
             )
 
         if uploaded_files and process:
+            from agents.extraction_agent import ingest_report
+
             batch_key = _batch_fingerprint(uploaded_files, region, age_group)
             processed_batches = st.session_state.setdefault("community_processed_batches", set())
             if batch_key in processed_batches:
@@ -280,6 +283,12 @@ def _render_dashboard_charts(data: dict):
 
 def _render_trends_and_forecasts(data: dict):
     """Render trend analysis and forecasts."""
+    from data_store.sqlite_store import (
+        forecast_abnormal_trend,
+        get_risk_forecast_by_region,
+        get_test_trend,
+    )
+
     available_tests = data.get("available_tests", [])
 
     st.markdown("### Trends and Forecasts")
@@ -433,6 +442,8 @@ def _render_community_chat():
     with st.chat_message("assistant"):
         with st.spinner("Analyzing community data..."):
             try:
+                from agents.community_agent import answer_community_question
+
                 result = answer_community_question(cq)
                 answer_text = result["answer"]
             except Exception:

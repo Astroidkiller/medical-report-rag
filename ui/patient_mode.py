@@ -8,10 +8,6 @@ import uuid
 
 import streamlit as st
 
-from agents.extraction_agent import ingest_report
-from agents.qa_agent import answer_patient_question
-from agents.risk_agent import generate_risk_card, generate_risk_explanation
-from core.embeddings import clear_collection
 from ui.components import render_lab_values_grid, render_risk_card, render_source_evidence
 
 
@@ -72,6 +68,9 @@ def render_patient_mode():
     collection_name = _get_session_collection()
 
     if not st.session_state.get("patient_ingestion_results"):
+        from agents.extraction_agent import ingest_report
+        from core.embeddings import clear_collection
+
         with st.status("Analyzing report files...", expanded=True):
             clear_collection(collection_name)
             results = []
@@ -125,6 +124,8 @@ def render_patient_mode():
 
     for idx, result in enumerate(results):
         with tabs[idx]:
+            from agents.risk_agent import generate_risk_card, generate_risk_explanation
+
             risk_card = generate_risk_card(result["flagged_values"], result["risk_summary"])
             render_risk_card(risk_card)
 
@@ -195,6 +196,8 @@ def _render_patient_chat(results: list[dict], collection_name: str):
         placeholder = st.empty()
 
         try:
+            from agents.qa_agent import answer_patient_question
+
             response = answer_patient_question(
                 query=query,
                 collection_name=collection_name,

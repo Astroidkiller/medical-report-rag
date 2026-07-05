@@ -2,9 +2,7 @@
 
 import streamlit as st
 
-from ui.community_mode import render_community_mode
 from ui.components import render_disclaimer, render_mode_badge
-from ui.patient_mode import render_patient_mode
 from ui.styles import get_custom_css
 
 
@@ -81,6 +79,10 @@ render_mode_badge(current_mode)
 render_disclaimer()
 
 if current_mode == "patient":
+    from ui.patient_mode import render_patient_mode
+
     render_patient_mode()
 else:
+    from ui.community_mode import render_community_mode
+
     render_community_mode()
