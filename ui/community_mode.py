@@ -138,7 +138,8 @@ def _render_bulk_upload():
 
         if uploaded_files and process:
             batch_key = _batch_fingerprint(uploaded_files, region, age_group)
-            if batch_key == st.session_state.get("community_last_batch_key"):
+            processed_batches = st.session_state.setdefault("community_processed_batches", set())
+            if batch_key in processed_batches:
                 st.info("This exact batch has already been processed in this session.")
                 return
 
@@ -182,7 +183,7 @@ def _render_bulk_upload():
                     st.success(f"All {success_count} reports processed successfully.")
 
             if success_count:
-                st.session_state.community_last_batch_key = batch_key
+                processed_batches.add(batch_key)
             st.session_state.community_dashboard_data = None
 
 
