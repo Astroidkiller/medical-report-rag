@@ -61,9 +61,26 @@ def ingest_report(
     raw_text = extract_text_from_pdf(file_path)
     tables = extract_tables_from_pdf(file_path)
 
+    # DEBUG: Log extraction results
+    print(f"[EXTRACTION DEBUG] PDF text length: {len(raw_text)} chars, {len(raw_text.splitlines())} lines")
+    print(f"[EXTRACTION DEBUG] Tables found: {len(tables)}")
+    if tables:
+        for ti, tbl in enumerate(tables):
+            print(f"[EXTRACTION DEBUG] Table {ti}: {len(tbl)} rows, headers: {tbl[0] if tbl else 'EMPTY'}")
+    if raw_text:
+        # Print first 500 chars to see the format
+        print(f"[EXTRACTION DEBUG] Text preview: {raw_text[:500]}")
+
     # 2. Extract structured lab values
     text_lab_values = parse_lab_values(raw_text)
     table_lab_values = parse_lab_values_from_tables(tables)
+
+    print(f"[EXTRACTION DEBUG] Regex text parser found: {len(text_lab_values)} values")
+    print(f"[EXTRACTION DEBUG] Table parser found: {len(table_lab_values)} values")
+    if text_lab_values:
+        print(f"[EXTRACTION DEBUG] Sample text value: {text_lab_values[0]}")
+    if table_lab_values:
+        print(f"[EXTRACTION DEBUG] Sample table value: {table_lab_values[0]}")
 
     # Merge, deduplicate by test name (prefer table-extracted if both exist)
     seen = {}
@@ -75,8 +92,12 @@ def ingest_report(
             seen[key] = lv
     all_lab_values = list(seen.values())
 
+    print(f"[EXTRACTION DEBUG] Merged lab values: {len(all_lab_values)}")
+
     if not all_lab_values:
+        print("[EXTRACTION DEBUG] No values from regex/table - trying LLM fallback...")
         all_lab_values = parse_all_lab_values_llm_fallback(raw_text, tables)
+        print(f"[EXTRACTION DEBUG] LLM fallback returned: {len(all_lab_values)} values")
 
     # 3. Flag anomalies
     flagged_values = flag_all_values(all_lab_values)

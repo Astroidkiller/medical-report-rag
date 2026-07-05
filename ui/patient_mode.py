@@ -96,13 +96,21 @@ def render_patient_mode():
                         store_vectors=False,
                     )
                     results.append(result)
+
+                    # Debug info visible in the UI
+                    raw = result.get("raw_text", "")
+                    st.write(f"📄 Extracted {len(raw)} chars, {len(raw.splitlines())} lines from PDF")
+                    st.write(f"🔬 Found {len(result.get('lab_values', []))} lab values")
+
                     st.write(
                         f"Done: {result['risk_summary']['total']} tests, "
                         f"{result['risk_summary']['abnormal']} abnormal, "
                         f"{result['risk_summary']['critical']} critical"
                     )
                 except Exception as exc:
+                    import traceback
                     st.error(f"Could not process {safe_name}: {exc}")
+                    st.code(traceback.format_exc())
 
             st.session_state.patient_ingestion_results = results
 
