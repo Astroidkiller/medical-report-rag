@@ -21,7 +21,7 @@ GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 
 # ---------- LLM CONFIGURATION ----------
 # Provider: "gemini" (API key), "vertex_ai" (GCP), or "groq" (fallback)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
 
 # Model names per provider
 LLM_MODELS = {
