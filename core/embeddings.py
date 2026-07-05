@@ -3,7 +3,6 @@ Embedding generation and vector store management.
 Wraps SentenceTransformers, Gemini API, and ChromaDB.
 """
 
-import chromadb
 import sys
 import os
 
@@ -25,7 +24,7 @@ def get_embedding_model():
     return _embedding_model
 
 
-def get_chroma_client() -> chromadb.ClientAPI:
+def get_chroma_client():
     """Get or create the ChromaDB client (singleton).
 
     Uses the modern chromadb.Client() API (ephemeral, in-memory).
@@ -34,6 +33,7 @@ def get_chroma_client() -> chromadb.ClientAPI:
     """
     global _chroma_client
     if _chroma_client is None:
+        import chromadb
         # Modern ChromaDB: use EphemeralClient (in-memory, no deprecated Settings)
         _chroma_client = chromadb.EphemeralClient()
     return _chroma_client
