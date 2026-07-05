@@ -35,20 +35,22 @@ LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, "gemini-2.0-flash")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # ---------- EMBEDDING CONFIGURATION ----------
-# Backend: "vertex_ai" or "local" (SentenceTransformers)
-EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "local")
+# Backend: "gemini", "vertex_ai", or "local" (SentenceTransformers)
+EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "gemini")
 
 EMBEDDING_MODELS = {
+    "gemini": "text-embedding-004",
     "vertex_ai": "text-embedding-005",
     "local": "all-MiniLM-L6-v2",
 }
-EMBEDDING_MODEL = EMBEDDING_MODELS.get(EMBEDDING_BACKEND, "all-MiniLM-L6-v2")
+EMBEDDING_MODEL = EMBEDDING_MODELS.get(EMBEDDING_BACKEND, "text-embedding-004")
 
 EMBEDDING_DIMENSIONS = {
+    "gemini": 768,
     "vertex_ai": 768,
     "local": 384,
 }
-EMBEDDING_DIMENSION = EMBEDDING_DIMENSIONS.get(EMBEDDING_BACKEND, 384)
+EMBEDDING_DIMENSION = EMBEDDING_DIMENSIONS.get(EMBEDDING_BACKEND, 768)
 
 # ---------- VECTOR STORE CONFIGURATION ----------
 # Backend: "chromadb" (local) or "alloydb" (GCP)

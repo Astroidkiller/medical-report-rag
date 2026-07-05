@@ -1,16 +1,14 @@
 """
 Embedding generation and vector store management.
-Wraps SentenceTransformers and ChromaDB.
+Wraps SentenceTransformers, Gemini API, and ChromaDB.
 """
 
-from sentence_transformers import SentenceTransformer
 import chromadb
-
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import EMBEDDING_MODEL, CHROMA_DB_DIR, TOP_K_RESULTS
+from config import EMBEDDING_MODEL, CHROMA_DB_DIR, TOP_K_RESULTS, EMBEDDING_BACKEND
 
 
 # Module-level singletons (loaded lazily)
@@ -18,10 +16,11 @@ _embedding_model = None
 _chroma_client = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model():
     """Get or create the sentence transformer model (singleton)."""
     global _embedding_model
     if _embedding_model is None:
+        from sentence_transformers import SentenceTransformer
         _embedding_model = SentenceTransformer(EMBEDDING_MODEL)
     return _embedding_model
 
@@ -31,7 +30,7 @@ def get_chroma_client() -> chromadb.ClientAPI:
 
     Uses the modern chromadb.Client() API (ephemeral, in-memory).
     The deprecated chroma_db_impl / persist_directory Settings
-    kwargs were removed in ChromaDB ≥ 0.4.
+    kwargs were removed in ChromaDB >= 0.4.
     """
     global _chroma_client
     if _chroma_client is None:
@@ -50,9 +49,26 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     Returns:
         List of embedding vectors (as lists of floats).
     """
-    model = get_embedding_model()
-    embeddings = model.encode(texts)
-    return [e.tolist() for e in embeddings]
+    if EMBEDDING_BACKEND == "gemini":
+        from core.llm_client import _get_gemini_client
+        client = _get_gemini_client()
+        result = client.models.embed_content(
+            model=EMBEDDING_MODEL,
+            contents=texts,
+        )
+        return [e.values for e in result.embeddings]
+    elif EMBEDDING_BACKEND == "vertex_ai":
+        from core.llm_client import _get_vertex_model
+        client = _get_vertex_model()
+        result = client.models.embed_content(
+            model=EMBEDDING_MODEL,
+            contents=texts,
+        )
+        return [e.values for e in result.embeddings]
+    else:
+        model = get_embedding_model()
+        embeddings = model.encode(texts)
+        return [e.tolist() for e in embeddings]
 
 
 def store_chunks(
@@ -105,8 +121,7 @@ def query_similar(
     if n_results is None:
         n_results = TOP_K_RESULTS
 
-    model = get_embedding_model()
-    query_embedding = model.encode([query_text])[0].tolist()
+    query_embedding = embed_texts([query_text])[0]
 
     client = get_chroma_client()
     collection = client.get_or_create_collection(name=collection_name)

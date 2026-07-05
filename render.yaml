@@ -9,7 +9,7 @@ services:
       - key: LLM_PROVIDER
         value: gemini
       - key: EMBEDDING_BACKEND
-        value: local
+        value: gemini
       - key: VECTOR_STORE_BACKEND
         value: chromadb
       - key: STREAMLIT_SERVER_ENABLE_CORS
