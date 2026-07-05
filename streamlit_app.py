@@ -1,94 +1,85 @@
-"""
-Community Health Intelligence Assistant
-Main Streamlit Application — Dual-Mode Interface
-
-A platform that helps both individual patients AND community health stakeholders
-understand health data and make better decisions.
-
-Modes:
-- 🧑‍⚕️ Patient Mode: Upload your report, get explanations, ask questions
-- 🏥 Community Mode: Aggregate dashboard with trends, alerts, and NL queries
-"""
+"""Community Health Intelligence Assistant Streamlit application."""
 
 import streamlit as st
-from ui.styles import get_custom_css
+
+from ui.community_mode import render_community_mode
 from ui.components import render_disclaimer, render_mode_badge
 from ui.patient_mode import render_patient_mode
-from ui.community_mode import render_community_mode
+from ui.styles import get_custom_css
 
-# ---------- PAGE CONFIG ----------
+
 st.set_page_config(
     page_title="Community Health Intelligence Assistant",
-    page_icon="🏥",
+    page_icon="health",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         "About": (
-            "Community Health Intelligence Assistant — "
-            "An AI-powered platform for patient report understanding "
-            "and community health trend analysis."
+            "Community Health Intelligence Assistant is an AI-assisted workspace "
+            "for patient report understanding and community health trend analysis."
         ),
     },
 )
 
-# ---------- INJECT CUSTOM CSS ----------
-st.markdown(get_custom_css(), unsafe_allow_html=True)
 
-# ---------- SIDEBAR ----------
 with st.sidebar:
-    st.markdown("## 🏥 Health Intelligence")
-    st.markdown("---")
-
-    mode = st.radio(
-        "Select Mode",
-        ["🧑‍⚕️ Patient Mode", "🏥 Community Mode"],
-        index=0,
-        key="app_mode",
-        help="Patient Mode: Understand your personal report.\n"
-             "Community Mode: Analyze population health trends.",
-    )
-
-    st.markdown("---")
-    st.markdown("### About")
     st.markdown(
-        """
-        **Community Health Intelligence Assistant** helps both individual patients
-        and community health stakeholders (clinics, ASHA workers, local health
-        departments) understand health data and make better decisions.
-
-        **Built with:**
-        - 🤖 Google Gemini (LLM)
-        - 📊 ChromaDB (Vector Search)
-        - 🧬 SentenceTransformers (Embeddings)
-        - 📈 Plotly (Visualizations)
-        - 🗃️ SQLite (Aggregate Data)
-        """
-    )
-
-    st.markdown("---")
-    st.markdown(
-        '<p style="font-size:0.75rem; opacity:0.5;">v2.0 — AI for Better Living & Smarter Communities</p>',
+        """<div class="sidebar-title">Health Intelligence</div>
+        <div class="sidebar-subtitle">Patient reports and population insights</div>""",
         unsafe_allow_html=True,
     )
 
-# ---------- HEADER ----------
+    mode = st.radio(
+        "Workspace",
+        ["Patient Mode", "Community Mode"],
+        index=0,
+        key="app_mode",
+        help="Patient Mode explains personal reports. Community Mode analyzes population-level trends.",
+    )
+
+    theme = st.segmented_control(
+        "Theme",
+        ["Dark", "Light"],
+        default="Dark",
+        key="app_theme",
+    )
+
+    st.markdown("---")
+    st.markdown("### System")
+    st.caption("LLM: Gemini or configured fallback")
+    st.caption("Retrieval: ChromaDB vector search")
+    st.caption("Analytics: SQLite, pandas, Plotly")
+
+    st.markdown("---")
+    st.caption("v2.1 - redesigned Streamlit interface")
+
+
+theme = theme if isinstance(theme, str) else "Dark"
+
+try:
+    custom_css = get_custom_css(theme)
+except TypeError:
+    custom_css = get_custom_css()
+
+st.markdown(custom_css, unsafe_allow_html=True)
+
+current_mode = "patient" if mode == "Patient Mode" else "community"
+
 st.markdown(
-    """<h1 style="margin-bottom: 4px;">
-    🏥 Community Health Intelligence Assistant
-    </h1>""",
+    """<section class="app-hero">
+        <div class="app-kicker">AI-assisted health workspace</div>
+        <h1>Community Health Intelligence Assistant</h1>
+        <p>
+            Review patient reports, surface abnormal values, ask grounded questions,
+            and monitor community-level health trends from one focused dashboard.
+        </p>
+    </section>""",
     unsafe_allow_html=True,
 )
-st.caption("AI for Better Living and Smarter Communities — Powered by RAG + Anomaly Detection + Aggregate Analytics")
 
-# Mode badge
-current_mode = "patient" if "Patient" in mode else "community"
 render_mode_badge(current_mode)
-st.markdown("")  # spacer
-
-# Disclaimer
 render_disclaimer()
 
-# ---------- ROUTE TO MODE ----------
 if current_mode == "patient":
     render_patient_mode()
 else:
