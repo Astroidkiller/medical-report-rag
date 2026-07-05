@@ -54,7 +54,7 @@ def _get_gemini_client():
                 api_key=api_key,
                 http_options=types.HttpOptions(timeout=_LLM_TIMEOUT * 1000),
             )
-        except TypeError:
+        except (TypeError, AttributeError):
             _gemini_client = genai.Client(api_key=api_key)
     return _gemini_client
 
@@ -76,7 +76,7 @@ def _get_vertex_model():
                 location=GCP_LOCATION,
                 http_options=types.HttpOptions(timeout=_LLM_TIMEOUT * 1000),
             )
-        except TypeError:
+        except (TypeError, AttributeError):
             client = genai.Client(
                 vertexai=True,
                 project=GCP_PROJECT_ID,
