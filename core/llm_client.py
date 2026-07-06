@@ -117,8 +117,8 @@ GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 def _mask_api_key(text: str) -> str:
     """Mask the API key in any error messages to prevent exposing it in the UI."""
     import re
-    # Matches key=... or ?key=... or key: ... up to next parameter or boundary
-    return re.sub(r"key=[A-Za-z0-9_\-]+", "key=REDACTED", text)
+    # Matches key= up to next parameter (&), space, quote, or end of line/string
+    return re.sub(r"key=[^&\s'\"]+", "key=REDACTED", text)
 
 
 def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
@@ -227,7 +227,7 @@ def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
 # ---------- Gemini Embeddings via REST ----------
 
 
-def embed_texts_gemini_rest(texts: list[str], model: str = "text-embedding-004") -> list[list[float]]:
+def embed_texts_gemini_rest(texts: list[str], model: str = "gemini-embedding-2") -> list[list[float]]:
     """Generate embeddings using Gemini REST API."""
     api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -250,7 +250,7 @@ def embed_texts_gemini_rest(texts: list[str], model: str = "text-embedding-004")
             values = data.get("embedding", {}).get("values", [])
             all_embeddings.append(values)
         except Exception as e:
-            print(f"Embedding error for text chunk: {e}")
+            print(f"Embedding error for text chunk: {_mask_api_key(str(e))}")
             # Return zero vector as fallback
             all_embeddings.append([0.0] * 768)
 
