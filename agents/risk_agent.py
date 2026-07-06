@@ -128,14 +128,55 @@ def generate_risk_explanation(risk_card: dict) -> str:
     if not findings_text:
         return "✅ All your test results are within the expected normal ranges. No immediate concerns were identified."
 
-    prompt = f"""Based on these medical report findings, provide a brief, reassuring but honest explanation for the patient.
-Keep it to 3-4 sentences. Don't use overly alarming language but be clear about what needs attention.
+    prompt = f"""You are explaining medical test results to a patient who has NO medical background.
+
+RULES — follow these strictly:
+1. Use very simple, everyday language — imagine you are explaining to a friend over coffee.
+2. NEVER use medical jargon. If you must mention a test name, immediately explain what it checks in plain words (e.g., "Your HbA1c — this checks your average blood sugar over the past few months — is a bit high").
+3. Use short sentences. Keep paragraphs to 2-3 sentences max.
+4. Be honest but kind — do not scare the patient, but do not hide important information either.
+5. Use a warm, supportive tone like a caring family doctor would.
+6. Write at a 5th-grade reading level.
+7. Do NOT use any emojis anywhere in your response.
+
+FORMAT your response EXACTLY like this (use markdown headings and horizontal rules for clear separation):
+
+## Overview
+
+A brief 1-2 sentence summary of what tests were done and the overall result.
+
+---
+
+## What Needs Your Attention
+
+For each abnormal or critical result, explain in bullet points:
+- What the test checks (in plain words)
+- What your result means
+- Why it matters for your health
+
+---
+
+## What Looks Good
+
+Briefly mention the normal results to reassure the patient.
+
+---
+
+## Suggested Next Steps
+
+Simple, actionable advice — which type of doctor to see, written in plain words like "a heart doctor" instead of "cardiologist".
+
+---
+
+## Disclaimer
+
+This is an AI-generated summary for informational purposes only. It is not a medical diagnosis. Please consult your doctor for proper medical advice.
+
+---
+Here are the findings:
 
 Risk Level: {risk_card['risk_level']}
-{findings_text}
-
-End with a recommendation about which type of specialist to consult, if applicable.
-Always include the disclaimer that this is AI-generated and not medical advice."""
+{findings_text}"""
 
     try:
         return generate(prompt)
