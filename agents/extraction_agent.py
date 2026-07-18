@@ -16,6 +16,7 @@ from core.chunker import chunk_text
 from core.lab_value_parser import parse_lab_values, parse_lab_values_from_tables, parse_all_lab_values_llm_fallback
 from core.anomaly_detector import flag_all_values, generate_risk_summary
 from core.embeddings import embed_texts, store_chunks, clear_collection
+from core.anonymizer import anonymize_text
 from data_store.sqlite_store import insert_report, insert_lab_values
 from data_store.models import LabValueRecord, ReportRecord
 
@@ -48,7 +49,9 @@ def ingest_report(
     Returns:
         Dict with report_id, chunks, flagged_values, risk_summary, raw_text.
     """
+    import hashlib
     report_id = str(uuid.uuid4())
+    patient_id = hashlib.sha256(filename.encode()).hexdigest()[:12]
     timestamp = datetime.now().isoformat()
 
     # Simulate demographics if not provided (hackathon demo)
@@ -71,40 +74,36 @@ def ingest_report(
         # Print first 500 chars to see the format
         print(f"[EXTRACTION DEBUG] Text preview: {raw_text[:500]}")
 
-    # 2. Extract structured lab values
-    text_lab_values = parse_lab_values(raw_text)
-    table_lab_values = parse_lab_values_from_tables(tables)
+    # 2. Parse values
+    # Try LLM extraction first (highly robust, clinically focused, filters out address lines & noise)
+    print("[EXTRACTION] Running primary LLM extraction...")
+    all_lab_values = parse_all_lab_values_llm_fallback(raw_text, tables)
+    print(f"[EXTRACTION] LLM extraction returned: {len(all_lab_values)} values")
 
-    print(f"[EXTRACTION DEBUG] Regex text parser found: {len(text_lab_values)} values")
-    print(f"[EXTRACTION DEBUG] Table parser found: {len(table_lab_values)} values")
-    if text_lab_values:
-        print(f"[EXTRACTION DEBUG] Sample text value: {text_lab_values[0]}")
-    if table_lab_values:
-        print(f"[EXTRACTION DEBUG] Sample table value: {table_lab_values[0]}")
-
-    # Merge, deduplicate by test name (prefer table-extracted if both exist)
-    seen = {}
-    for lv in table_lab_values:
-        seen[lv.test_name.lower()] = lv
-    for lv in text_lab_values:
-        key = lv.test_name.lower()
-        if key not in seen:
-            seen[key] = lv
-    all_lab_values = list(seen.values())
-
-    print(f"[EXTRACTION DEBUG] Merged lab values: {len(all_lab_values)}")
-
+    # If LLM fails or returns empty, run backup regex parsers
     if not all_lab_values:
-        print("[EXTRACTION DEBUG] No values from regex/table - trying LLM fallback...")
-        all_lab_values = parse_all_lab_values_llm_fallback(raw_text, tables)
-        print(f"[EXTRACTION DEBUG] LLM fallback returned: {len(all_lab_values)} values")
+        print("[EXTRACTION] LLM returned 0 values - running backup regex parser...")
+        text_lab_values = parse_lab_values(raw_text)
+        table_lab_values = parse_lab_values_from_tables(tables)
+        
+        # Merge, deduplicate by test name (prefer table-extracted if both exist)
+        seen = {}
+        for lv in table_lab_values:
+            seen[lv.test_name.lower()] = lv
+        for lv in text_lab_values:
+            key = lv.test_name.lower()
+            if key not in seen:
+                seen[key] = lv
+        all_lab_values = list(seen.values())
+        print(f"[EXTRACTION] Backup regex parser returned: {len(all_lab_values)} values")
 
     # 3. Flag anomalies
     flagged_values = flag_all_values(all_lab_values)
     risk_summary = generate_risk_summary(flagged_values)
 
-    # 4. Chunk text for vector store
-    chunks = chunk_text(raw_text)
+    # 4. Anonymize text to prevent PHI leakage, then chunk for vector store
+    anonymized_text = anonymize_text(raw_text)
+    chunks = chunk_text(anonymized_text)
 
     # 5. Store in vector DB
     if chunks and store_vectors:
@@ -151,13 +150,21 @@ def ingest_report(
     if lab_records:
         insert_lab_values(lab_records)
 
+    from core.fhir_models import create_fhir_observation_from_flagged_value
+    fhir_observations = [
+        create_fhir_observation_from_flagged_value(fv, report_id, patient_id)
+        for fv in flagged_values
+    ]
+
     return {
         "report_id": report_id,
+        "patient_id": patient_id,
         "filename": filename,
         "raw_text": raw_text,
         "chunks": chunks,
         "lab_values": all_lab_values,
         "flagged_values": flagged_values,
+        "fhir_observations": fhir_observations,
         "risk_summary": risk_summary,
         "region": anonymized_region,
         "age_group": age_group,

@@ -200,6 +200,7 @@ def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
         try:
             resp = requests.post(url, json=body, timeout=_LLM_TIMEOUT, stream=True)
             resp.raise_for_status()
+            resp.encoding = 'utf-8'
 
             for line in resp.iter_lines(decode_unicode=True):
                 if not line or not line.startswith("data: "):
@@ -228,33 +229,49 @@ def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
 
 
 def embed_texts_gemini_rest(texts: list[str], model: str = "gemini-embedding-2") -> list[list[float]]:
-    """Generate embeddings using Gemini REST API."""
+    """Generate embeddings using Gemini REST API (batch endpoint for high performance)."""
     api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY is required for Gemini embeddings")
 
-    url = f"{GEMINI_API_BASE}/{model}:embedContent?key={api_key}"
+    if not texts:
+        return []
 
-    all_embeddings = []
+    url = f"{GEMINI_API_BASE}/{model}:batchEmbedContents?key={api_key}"
+
+    # Build batch requests
+    requests_body = []
     for text in texts:
-        body = {
+        requests_body.append({
             "model": f"models/{model}",
             "content": {
                 "parts": [{"text": text}]
-            },
-        }
-        try:
-            resp = requests.post(url, json=body, timeout=_LLM_TIMEOUT)
-            resp.raise_for_status()
-            data = resp.json()
-            values = data.get("embedding", {}).get("values", [])
-            all_embeddings.append(values)
-        except Exception as e:
-            print(f"Embedding error for text chunk: {_mask_api_key(str(e))}")
-            # Return zero vector as fallback
-            all_embeddings.append([0.0] * 768)
+            }
+        })
 
-    return all_embeddings
+    body = {"requests": requests_body}
+
+    try:
+        resp = requests.post(url, json=body, timeout=_LLM_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        embeddings_data = data.get("embeddings", [])
+        
+        all_embeddings = []
+        for emb in embeddings_data:
+            values = emb.get("values", [])
+            all_embeddings.append(values)
+            
+        # Fallback in case response is sparse
+        if len(all_embeddings) < len(texts):
+            diff = len(texts) - len(all_embeddings)
+            all_embeddings.extend([[0.0] * 768] * diff)
+            
+        return all_embeddings
+    except Exception as e:
+        print(f"Batch embedding error: {_mask_api_key(str(e))}")
+        # Return zero vectors as fallback
+        return [[0.0] * 768] * len(texts)
 
 
 # ---------- Groq / Llama Fallback ----------

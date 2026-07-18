@@ -13,6 +13,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import SQLITE_DB_PATH
 from data_store.models import LabValueRecord, ReportRecord, CommunityAlert
 import uuid
+import random
+import math
+
+def _apply_laplace_noise(val: float, sensitivity: float = 1.0, epsilon: float = 0.5) -> float:
+    """Applies calibrated Laplace noise for Differential Privacy (DP) guarantees."""
+    scale = sensitivity / epsilon
+    u = random.random() - 0.5
+    if u == 0:
+        noise = 0.0
+    else:
+        noise = -scale * math.copysign(math.log(1.0 - 2.0 * abs(u)), u)
+    return val + noise
 
 
 @contextmanager
@@ -108,22 +120,28 @@ def insert_lab_values(values: list[LabValueRecord]) -> None:
 
 # ---------- AGGREGATE QUERIES ----------
 
-def get_total_reports() -> int:
-    """Get total number of reports in the database."""
+def get_total_reports(use_dp: bool = True) -> int:
+    """Get total number of reports in the database, with optional DP."""
     with get_connection() as conn:
         row = conn.execute("SELECT COUNT(*) as cnt FROM reports").fetchone()
-        return row["cnt"] if row else 0
+        count = row["cnt"] if row else 0
+        if use_dp and count > 0:
+            count = max(0, int(round(_apply_laplace_noise(count, sensitivity=1.0, epsilon=0.5))))
+        return count
 
 
-def get_total_lab_values() -> int:
-    """Get total number of lab value records."""
+def get_total_lab_values(use_dp: bool = True) -> int:
+    """Get total number of lab value records, with optional DP."""
     with get_connection() as conn:
         row = conn.execute("SELECT COUNT(*) as cnt FROM lab_values").fetchone()
-        return row["cnt"] if row else 0
+        count = row["cnt"] if row else 0
+        if use_dp and count > 0:
+            count = max(0, int(round(_apply_laplace_noise(count, sensitivity=1.0, epsilon=0.5))))
+        return count
 
 
-def get_abnormal_rate() -> float:
-    """Get the percentage of lab values flagged as abnormal or critical."""
+def get_abnormal_rate(use_dp: bool = True) -> float:
+    """Get the percentage of lab values flagged as abnormal or critical, with optional DP."""
     with get_connection() as conn:
         row = conn.execute("""
             SELECT
@@ -132,7 +150,14 @@ def get_abnormal_rate() -> float:
             FROM lab_values
         """).fetchone()
         if row and row["total"] > 0:
-            return (row["abnormal"] / row["total"]) * 100
+            total = row["total"]
+            abnormal = row["abnormal"] if row["abnormal"] is not None else 0
+            if use_dp:
+                total_dp = max(1, _apply_laplace_noise(total, sensitivity=1.0, epsilon=0.5))
+                abnormal_dp = max(0, _apply_laplace_noise(abnormal, sensitivity=1.0, epsilon=0.5))
+                abnormal_dp = min(total_dp, abnormal_dp)
+                return round((abnormal_dp / total_dp) * 100, 1)
+            return round((abnormal / total) * 100, 1)
         return 0.0
 
 
@@ -226,13 +251,8 @@ def get_test_trend(test_name: str, time_period: str = None) -> list[dict]:
         return [dict(row) for row in rows]
 
 
-def get_region_summary(time_period: str = None) -> list[dict]:
-    """
-    Get anomaly summary by region.
-
-    Returns:
-        List of dicts with region, total, abnormal, percentage.
-    """
+def get_region_summary(time_period: str = None, use_dp: bool = True) -> list[dict]:
+    """Get anomaly summary by region, with optional Differential Privacy."""
     with get_connection() as conn:
         where_clause = ""
         params = []
@@ -244,25 +264,38 @@ def get_region_summary(time_period: str = None) -> list[dict]:
             SELECT
                 anonymized_region as region,
                 COUNT(*) as total,
-                SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal,
-                ROUND(SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END)
-                    * 100.0 / COUNT(*), 1) as percentage
+                SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal
             FROM lab_values
             {where_clause}
             GROUP BY anonymized_region
-            ORDER BY percentage DESC
         """, params).fetchall()
 
-        return [dict(row) for row in rows]
+        results = []
+        for row in rows:
+            region = row["region"]
+            total = row["total"]
+            abnormal = row["abnormal"] if row["abnormal"] is not None else 0
+            if use_dp:
+                total_dp = max(1, _apply_laplace_noise(total, sensitivity=1.0, epsilon=0.5))
+                abnormal_dp = max(0, _apply_laplace_noise(abnormal, sensitivity=1.0, epsilon=0.5))
+                abnormal_dp = min(total_dp, abnormal_dp)
+                rate = round((abnormal_dp / total_dp) * 100, 1)
+            else:
+                rate = round((abnormal / total) * 100, 1) if total > 0 else 0.0
+            
+            results.append({
+                "region": region,
+                "total": int(round(total_dp)) if use_dp else total,
+                "abnormal": int(round(abnormal_dp)) if use_dp else abnormal,
+                "percentage": rate
+            })
+        
+        results.sort(key=lambda r: r["percentage"], reverse=True)
+        return results
 
 
-def get_age_group_summary(time_period: str = None) -> list[dict]:
-    """
-    Get anomaly summary by age group.
-
-    Returns:
-        List of dicts with age_group, total, abnormal, percentage.
-    """
+def get_age_group_summary(time_period: str = None, use_dp: bool = True) -> list[dict]:
+    """Get anomaly summary by age group, with optional Differential Privacy."""
     with get_connection() as conn:
         where_clause = ""
         params = []
@@ -274,16 +307,34 @@ def get_age_group_summary(time_period: str = None) -> list[dict]:
             SELECT
                 age_group,
                 COUNT(*) as total,
-                SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal,
-                ROUND(SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END)
-                    * 100.0 / COUNT(*), 1) as percentage
+                SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal
             FROM lab_values
             {where_clause}
             GROUP BY age_group
-            ORDER BY percentage DESC
         """, params).fetchall()
 
-        return [dict(row) for row in rows]
+        results = []
+        for row in rows:
+            age = row["age_group"]
+            total = row["total"]
+            abnormal = row["abnormal"] if row["abnormal"] is not None else 0
+            if use_dp:
+                total_dp = max(1, _apply_laplace_noise(total, sensitivity=1.0, epsilon=0.5))
+                abnormal_dp = max(0, _apply_laplace_noise(abnormal, sensitivity=1.0, epsilon=0.5))
+                abnormal_dp = min(total_dp, abnormal_dp)
+                rate = round((abnormal_dp / total_dp) * 100, 1)
+            else:
+                rate = round((abnormal / total) * 100, 1) if total > 0 else 0.0
+            
+            results.append({
+                "age_group": age,
+                "total": int(round(total_dp)) if use_dp else total,
+                "abnormal": int(round(abnormal_dp)) if use_dp else abnormal,
+                "percentage": rate
+            })
+        
+        results.sort(key=lambda r: r["percentage"], reverse=True)
+        return results
 
 
 def generate_community_alerts(time_period: str = None, threshold: float = 20.0) -> list[CommunityAlert]:

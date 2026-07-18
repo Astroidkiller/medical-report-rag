@@ -20,7 +20,7 @@ The Community Health Intelligence Assistant is a **multi-agent RAG platform** th
 │                                                     │
 │  CLI (app.py)                                       │
 │     → pdfplumber (PDF extraction)                   │
-│     → Vertex AI Gemini (LLM — gemini-2.0-flash)    │
+│     → Vertex AI Gemini (LLM — gemini-2.5-flash)     │
 │     → SentenceTransformers / Vertex AI Embeddings   │
 │     → ChromaDB / AlloyDB pgvector (vector search)   │
 │     → SQLite (structured lab values & aggregates)   │
@@ -55,7 +55,7 @@ The system supports dual-mode operation via environment variables:
 
 | Component | Local (Dev) | GCP (Production) |
 |---|---|---|
-| **LLM** | Google Gemini 2.0 Flash | Vertex AI Gemini 2.0 Flash |
+| **LLM** | Google Gemini 2.5 Flash | Vertex AI Gemini 2.5 Flash |
 | **Embeddings** | SentenceTransformers (all-MiniLM-L6-v2) | Vertex AI Embeddings (text-embedding-005) |
 | **Vector Store** | ChromaDB (ephemeral) | AlloyDB pgvector |
 | **Structured Data** | SQLite | BigQuery |
@@ -68,29 +68,29 @@ The system uses four specialized agents coordinated by a central orchestrator. E
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   ORCHESTRATOR (orchestrator.py)              │
-│                                                              │
-│   Session state: report_ids, risk_cards, anomalies           │
-│                                                              │
-│  ┌──────────────────┐    ┌──────────────────┐              │
-│  │ EXTRACTION AGENT │    │    QA AGENT       │              │
-│  │                  │    │                   │              │
-│  │ • PDF → Text     │    │ • Semantic Search │              │
-│  │ • Table Extract  │    │ • Context Build   │              │
-│  │ • Lab Parsing    │    │ • LLM Q&A         │              │
-│  │ • Anomaly Flag   │    │ • Source Attrib.  │              │
-│  │ • Store Data     │    │                   │              │
-│  └──────────────────┘    └──────────────────┘              │
-│                                                              │
-│  ┌──────────────────┐    ┌──────────────────┐              │
-│  │   RISK AGENT     │    │ COMMUNITY AGENT  │              │
-│  │                  │    │                   │              │
-│  │ • Risk Scoring   │    │ • Aggregate Query │              │
-│  │ • Risk Cards     │    │ • NL → Insights   │              │
-│  │ • LLM Explain    │    │ • Trend Analysis  │              │
-│  │ • Severity Map   │    │ • Alert Generate  │              │
-│  └──────────────────┘    └──────────────────┘              │
-│                                                              │
+│                   ORCHESTRATOR (orchestrator.py)            │
+│                                                             │
+│   Session state: report_ids, risk_cards, anomalies          │
+│                                                             │
+│  ┌──────────────────┐    ┌──────────────────┐               │
+│  │ EXTRACTION AGENT │    │    QA AGENT       │               │
+│  │                  │    │                  │               │
+│  │ • PDF → Text     │    │ • Semantic Search│               │
+│  │ • Table Extract  │    │ • Context Build  │               │
+│  │ • Lab Parsing    │    │ • LLM Q&A        │               │
+│  │ • Anomaly Flag   │    │ • Source Attrib. │               │
+│  │ • Store Data     │    │                  │               │
+│  └──────────────────┘    └──────────────────┘               │
+│                                                             │
+│  ┌──────────────────┐    ┌──────────────────┐               │
+│  │   RISK AGENT     │    │ COMMUNITY AGENT  │               │
+│  │                  │    │                  │               │
+│  │ • Risk Scoring   │    │ • Aggregate Query│               │
+│  │ • Risk Cards     │    │ • NL → Insights  │               │
+│  │ • LLM Explain    │    │ • Trend Analysis │               │
+│  │ • Severity Map   │    │ • Alert Generate │               │
+│  └──────────────────┘    └──────────────────┘               │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,11 +175,12 @@ Lab Value Extracted
     Risk Score & Card
 ```
 
-### Population-Level (across reports) — NEW
+### Population-Level (across reports)
 
 ```
 All Lab Records (SQLite)
          │
+         ▼
     ┌────┼────────────────┐
     ▼    ▼                ▼
 ┌────────┐  ┌──────────┐  ┌────────────────┐
@@ -204,22 +205,22 @@ All Lab Records (SQLite)
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│               RESPONSIBLE AI LAYER                   │
-│                                                      │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────┐ │
-│  │ Source       │  │ Privacy      │  │ Safety     │ │
-│  │ Attribution  │  │ Protection   │  │ Guardrails │ │
-│  │             │  │              │  │            │ │
-│  │ • Retrieved │  │ • No PII in  │  │ • Medical  │ │
-│  │   chunks    │  │   responses  │  │   disclaim │ │
-│  │   shown     │  │ • Anonymized │  │ • No diag- │ │
-│  │ • Source    │  │   community  │  │   nosis    │ │
-│  │   labels    │  │   data       │  │ • Prompt   │ │
-│  │ • Evidence  │  │ • System     │  │   injection│ │
-│  │   expander  │  │   prompt     │  │   defense  │ │
-│  │             │  │   blocks PII │  │            │ │
-│  └─────────────┘  └──────────────┘  └────────────┘ │
-│                                                      │
+│               RESPONSIBLE AI LAYER                  │
+│                                                     │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────┐  │
+│  │ Source      │  │ Privacy      │  │ Safety     │  │
+│  │ Attribution │  │ Protection   │  │ Guardrails │  │
+│  │             │  │              │  │            │  │
+│  │ • Retrieved │  │ • No PII in  │  │ • Medical  │  │
+│  │   chunks    │  │   responses  │  │   disclaim │  │
+│  │   shown     │  │ • Anonymized │  │ • No diag- │  │
+│  │ • Source    │  │   community  │  │   nosis    │  │
+│  │   labels    │  │   data       │  │ • Prompt   │  │
+│  │ • Evidence  │  │ • System     │  │   injection│  │
+│  │   expander  │  │   prompt     │  │   defense  │  │
+│  │             │  │   blocks PII │  │            │  │
+│  └─────────────┘  └──────────────┘  └────────────┘  │
+│                                                     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -238,11 +239,11 @@ The unified LLM client (`core/llm_client.py`) abstracts provider-specific SDKs:
 │  generate(prompt, system)       │
 │  generate_stream(prompt, sys)   │
 │                                 │
-│  ┌─────────┐    ┌──────────┐  │
-│  │ Gemini  │    │Vertex AI │  │
-│  │ Gemini  │    │ (fallback│  │
-│  │         │    │  for dev)│  │
-│  └─────────┘    └──────────┘  │
+│  ┌─────────┐    ┌──────────┐    │
+│  │ Gemini  │    │Vertex AI │    │
+│  │ Gemini  │    │ (fallback│    │
+│  │         │    │  for dev)│    │
+│  └─────────┘    └──────────┘    │
 └─────────────────────────────────┘
          ▲
          │
