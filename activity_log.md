@@ -38,6 +38,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **Free Hospital/Pharmacy Map & First Aid Widgets:** Added a keyless Leaflet.js locator map (fetching geolocation coordinates and displaying nearest medical points) and an interactive First Aid Guide (addressing cardiac arrest, seizures, snake bites, bleeding, choking) below the upload panel in Patient Mode.
 *   **Sticky Split Clinical Layout:** Redesigned active/inactive sidebar pills to avoid background blending and lock the menu to `100vh`, and refactored the ingested Patient Dashboard into a 2-column workstation split (report parameters on the left, sticky RAG chat floating on the right).
 *   **Fixed Desktop Sidebar & Map Redirects:** Reconfigured the sidebar layout to `position: fixed` to completely prevent the menu from scrolling away on long dashboards, and made the hospital and pharmacy listing cards clickable, redirecting to active directions via Google Maps query URLs.
+*   **Centered Dashboard Panel Alignment:** Reverted `.dashboard-main` margins to `0 auto` to keep it perfectly centered on the screen, moving the fixed sidebar offset shift to dynamic `padding-left` toggling on the outer `.stApp-container` wrapper.
 
 ---
 
@@ -45,6 +46,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `7124ca6` | fix: resolve dashboard-main shifting by offset padding-left on outer stApp-container | Fixed container centering issues during sidebar toggle events |
 | `c0f837c` | feat: make sidebar layout fixed desktop-side and add map navigation redirect links | Locked sidebar position and added LeafletMap anchor navigation links |
 | `4bd8992` | feat: implement medical locator, first aid guide, sidebar style fix, and sticky split chat layout | Pushed locator map, first aid guide, sidebar pill fixes, and split sticky chat |
 | `8b5b7e4` | fix: resolve React TypeError on trendData.forecast.map by mapping forecast_data | Fixed white screen crash on community dashboard render |
