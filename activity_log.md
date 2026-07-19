@@ -42,6 +42,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **OSM Overpass API Integration:** Replaced the local mock clinic locations with a dynamic OpenStreetMap Overpass API POST interpreter. The app now fetches real nearby hospital, clinic, and pharmacy coordinates relative to the user's active browser geolocation, sorts them by distance, and updates Leaflet map markers.
 *   **Multi-Tier Geolocation Resolver:** Configured a three-stage fallback system: browser geolocation (GPS), IP-based geolocating (`ipapi.co`) to locate users when coordinates are inaccurate or blocked, and a manual Search Box integrated with Nominatim geocoding to search any city, zip code, or address and re-center the map.
 *   **Leaflet Map Lifecycle Fix:** Decoupled map initialization, user tracking, and marker loading from the API places response lifecycle. The map now instantiates once on boot and smoothly pans to coordinates via `.setView()`, preventing visual lockups or race conditions when resolving geographic locations. Integrated `ipinfo.io` as a high-reliability fallback for CORS/SSL constraints.
+*   **User-Initiated Geocode & Disambiguation UI:** Disabled all automatic mount GPS/IP geolocation. The map now prompts the user to type their location. Nominatim is used to handle spelling errors (fuzzy lookup) and if duplicate matching cities exist (e.g. Hyderabad in India vs Pakistan), the app displays a confirmation list to let the user select the correct coordinates.
 
 ---
 
@@ -49,6 +50,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `94d70f3` | feat: switch to user-initiated search with fuzzy spelling resolver and disambiguation confirmation list | Added fuzzy search spelling resolver and duplicate city confirmations |
 | `2f38145` | fix: resolve leaflet rendering lifecycle race conditions and add ipinfo.io resolver fallback | Resolved map lockups and improved IP geolocation resolution |
 | `1fc3a80` | feat: implement multi-tier geolocator (browser GPS, IP-based lookup, and Nominatim address search) | Added geolocator fallbacks and search bar |
 | `3dd4137` | feat: query OpenStreetMap Overpass API for real nearby clinics and pharmacies | Integrated dynamic OSM Overpass API node queries on map |
