@@ -40,15 +40,17 @@ const PlotlyChart = ({ id, data, layout }) => {
 };
 
 
-// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS & OVERPASS API)
+// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS, DYNAMIC IP GEOLOCATION, & OSM GEODECODER)
 const LeafletMap = () => {
   const mapRef = React.useRef(null);
   const [mapType, setMapType] = React.useState('hospitals'); // 'hospitals' or 'pharmacies'
   const [userLocation, setUserLocation] = React.useState([28.6139, 77.2090]); // Default to New Delhi
   const [places, setPlaces] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchingLocation, setSearchingLocation] = React.useState(false);
   
-  // 1. Get browser geolocation on component mount
+  // 1. Get browser geolocation or fallback to IP-based lookup
   React.useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -56,10 +58,26 @@ const LeafletMap = () => {
           setUserLocation([position.coords.latitude, position.coords.longitude]);
         },
         (error) => {
-          console.warn("Geolocation access denied or failed, using default location.");
+          console.warn("Browser Geolocation failed or denied. Trying IP-based geolocator...");
+          fetchIpLocation();
         },
         { enableHighAccuracy: true, timeout: 5000 }
       );
+    } else {
+      fetchIpLocation();
+    }
+
+    function fetchIpLocation() {
+      fetch('https://ipapi.co/json/')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.latitude && data.longitude) {
+            setUserLocation([data.latitude, data.longitude]);
+          }
+        })
+        .catch(err => {
+          console.warn("IP Geolocation failed:", err);
+        });
     }
   }, []);
 
@@ -179,9 +197,31 @@ const LeafletMap = () => {
     }
   }, [userLocation, places]);
 
+  // 4. Handle Geocoding Search (using free Nominatim OSM Geocoder)
+  const handleSearchLocation = () => {
+    if (!searchQuery.trim()) return;
+    setSearchingLocation(true);
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
+      .then(res => res.json())
+      .then(data => {
+        setSearchingLocation(false);
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          setUserLocation([lat, lon]);
+        } else {
+          alert("Location not found. Please try another search term (e.g. city, area, or zip code).");
+        }
+      })
+      .catch(err => {
+        console.error("Geocoding failed:", err);
+        setSearchingLocation(false);
+      });
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#104891' }}>
           <span>📍</span> Nearby Medical Centers
         </h4>
@@ -219,6 +259,44 @@ const LeafletMap = () => {
             Pharmacies
           </button>
         </div>
+      </div>
+
+      {/* Address / Location Manual Search input */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+        <input
+          type="text"
+          placeholder="Type address, city, or zip code..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearchLocation()}
+          style={{
+            flexGrow: 1,
+            padding: '6px 12px',
+            fontSize: '0.8rem',
+            border: '1px solid #dcd1c4',
+            borderRadius: '6px',
+            background: '#ffffff',
+            color: '#242424',
+            outline: 'none'
+          }}
+        />
+        <button
+          onClick={handleSearchLocation}
+          disabled={searchingLocation}
+          style={{
+            padding: '6px 12px',
+            fontSize: '0.8rem',
+            background: '#104891',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 500,
+            transition: 'all 0.2s'
+          }}
+        >
+          {searchingLocation ? 'Searching...' : 'Search'}
+        </button>
       </div>
       
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', height: '240px' }}>
