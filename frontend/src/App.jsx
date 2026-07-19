@@ -40,11 +40,12 @@ const PlotlyChart = ({ id, data, layout }) => {
 };
 
 
-// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS & NOMINATIM GEODECODER WITH DISAMBIGUATION)
+// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS & NOMINATIM GEODECODER WITH AUTOCOMPLETE & DISAMBIGUATION)
 const LeafletMap = () => {
   const mapRef = React.useRef(null);
   const userMarkerRef = React.useRef(null);
   const markersGroupRef = React.useRef(null);
+  const debounceTimeoutRef = React.useRef(null);
   
   const [mapType, setMapType] = React.useState('hospitals'); // 'hospitals' or 'pharmacies'
   const [userLocation, setUserLocation] = React.useState([28.6139, 77.2090]); // Default New Delhi center
@@ -53,7 +54,17 @@ const LeafletMap = () => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchingLocation, setSearchingLocation] = React.useState(false);
   const [disambiguationOptions, setDisambiguationOptions] = React.useState([]);
+  const [suggestions, setSuggestions] = React.useState([]);
   const [hasSearched, setHasSearched] = React.useState(false);
+
+  // Clean up debounce timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // 1. Map Initialization effect (Runs once)
   React.useEffect(() => {
@@ -229,19 +240,59 @@ const LeafletMap = () => {
     }
   }, [places]);
 
-  // 5. Handle Nominatim geocoding search (supports spelling errors and multiple city selections)
+  // 5. Handle input change with 350ms debounce suggestions from Nominatim
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    if (!value.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    
+    debounceTimeoutRef.current = setTimeout(() => {
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(value)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.length > 0) {
+            const items = data.map(item => ({
+              display_name: item.display_name,
+              lat: parseFloat(item.lat),
+              lon: parseFloat(item.lon)
+            })).slice(0, 5); // display top 5 suggestions
+            setSuggestions(items);
+          } else {
+            setSuggestions([]);
+          }
+        })
+        .catch(err => {
+          console.warn("Fuzzy autocomplete suggestions failed:", err);
+        });
+    }, 350);
+  };
+
+  // 6. Handle Nominatim geocoding search (supports spelling errors and multiple city selections)
   const handleSearchLocation = () => {
     if (!searchQuery.trim()) return;
+    
+    // Clear debounce & active autocomplete suggestions list
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    setSuggestions([]);
+    
     setSearchingLocation(true);
     setDisambiguationOptions([]);
     
-    // We query Nominatim with address details to help disambiguate cities/countries
     fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(searchQuery)}`)
       .then(res => res.json())
       .then(data => {
         setSearchingLocation(false);
         if (data && data.length > 0) {
-          // Parse results to filter out duplicates or similar records
           const candidates = data.map(item => ({
             display_name: item.display_name,
             lat: parseFloat(item.lat),
@@ -249,12 +300,10 @@ const LeafletMap = () => {
           }));
           
           if (candidates.length === 1) {
-            // Found exactly 1 match
             setUserLocation([candidates[0].lat, candidates[0].lon]);
             setHasSearched(true);
           } else {
-            // Found multiple matches - show selection list to user
-            setDisambiguationOptions(candidates.slice(0, 4)); // Keep top 4 candidates
+            setDisambiguationOptions(candidates.slice(0, 4));
           }
         } else {
           alert("Location not found. Please check spelling or type a more specific city/zip code.");
@@ -308,25 +357,84 @@ const LeafletMap = () => {
         </div>
       </div>
 
-      {/* Geocoding Search Bar */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-        <input
-          type="text"
-          placeholder="Enter your city or area name (e.g. Bangalore, mumbay)..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearchLocation()}
-          style={{
-            flexGrow: 1,
-            padding: '8px 12px',
-            fontSize: '0.8rem',
-            border: '1px solid #dcd1c4',
-            borderRadius: '6px',
-            background: '#ffffff',
-            color: '#242424',
-            outline: 'none'
-          }}
-        />
+      {/* Geocoding Search Bar with Autocomplete suggestions */}
+      <div style={{ position: 'relative', display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        <div style={{ flexGrow: 1, position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="Type city or area name (e.g. Bangalore, mumbay)..."
+            value={searchQuery}
+            onChange={handleInputChange}
+            onFocus={() => {
+              if (searchQuery.trim() && suggestions.length === 0) {
+                handleInputChange({ target: { value: searchQuery } });
+              }
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearchLocation()}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              fontSize: '0.8rem',
+              border: '1px solid #dcd1c4',
+              borderRadius: '6px',
+              background: '#ffffff',
+              color: '#242424',
+              outline: 'none'
+            }}
+          />
+          
+          {/* Autocomplete suggestions list */}
+          {suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              background: '#ffffff',
+              border: '1px solid #dcd1c4',
+              borderRadius: '6px',
+              marginTop: '4px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              zIndex: 1000,
+              maxHeight: '180px',
+              overflowY: 'auto'
+            }}>
+              {suggestions.map((item, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setUserLocation([item.lat, item.lon]);
+                    setHasSearched(true);
+                    setSearchQuery(item.display_name.split(',')[0]); // autocomplete text box value
+                    setSuggestions([]);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    color: '#242424',
+                    borderBottom: idx < suggestions.length - 1 ? '1px solid #eae1d8' : 'none',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#f4f7fa';
+                    e.currentTarget.style.color = '#104891';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#ffffff';
+                    e.currentTarget.style.color = '#242424';
+                  }}
+                >
+                  📍 {item.display_name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
         <button
           onClick={handleSearchLocation}
           disabled={searchingLocation}
@@ -339,7 +447,8 @@ const LeafletMap = () => {
             borderRadius: '6px',
             cursor: 'pointer',
             fontWeight: 500,
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            flexShrink: 0
           }}
         >
           {searchingLocation ? 'Searching...' : 'Search'}
