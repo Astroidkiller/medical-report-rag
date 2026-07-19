@@ -29,34 +29,56 @@ from data_store.sqlite_store import (
 )
 
 
-def get_dashboard_data(time_period: str = None) -> dict:
+def get_dashboard_data(time_period: str = None, use_dp: bool = True) -> dict:
     """
     Get all data needed to render the community dashboard.
 
     Args:
         time_period: Optional ISO date string to filter.
+        use_dp: Whether to apply Differential Privacy.
 
     Returns:
         Dict with all dashboard metrics, charts data, and alerts.
     """
     return {
         "metrics": {
-            "total_reports": get_total_reports(),
-            "total_lab_values": get_total_lab_values(),
-            "abnormal_rate": round(get_abnormal_rate(), 1),
+            "total_reports": get_total_reports(use_dp=use_dp),
+            "total_lab_values": get_total_lab_values(use_dp=use_dp),
+            "abnormal_rate": round(get_abnormal_rate(use_dp=use_dp), 1),
         },
         "top_abnormal": get_top_abnormal_tests(n=10, time_period=time_period),
         "flag_distribution": get_flag_distribution(time_period=time_period),
-        "region_summary": get_region_summary(time_period=time_period),
-        "age_group_summary": get_age_group_summary(time_period=time_period),
+        "region_summary": get_region_summary(time_period=time_period, use_dp=use_dp),
+        "age_group_summary": get_age_group_summary(time_period=time_period, use_dp=use_dp),
         "alerts": [
             {
                 "severity": a.severity,
                 "message": a.message,
                 "test_name": a.test_name,
                 "percentage": a.percentage,
+                "region": a.region,
+                "age_group": a.age_group,
+                "action_recommendation": (
+                    f"Deploy a mobile diabetes screening van to {a.region} and prioritize HbA1c testing for the {a.age_group} cohort."
+                    if a.test_name == "HbA1c" and a.region
+                    else f"Initiate cardiovascular screening programs and healthy lifestyle workshops in {a.region}."
+                    if a.test_name == "Cholesterol" and a.region
+                    else f"Launch an iron-deficiency anemia screening and nutritional support drive in {a.region}."
+                    if a.test_name == "Hemoglobin" and a.region
+                    else f"Organize thyroid health checkups and diagnostic counseling services in {a.region}."
+                    if a.test_name == "TSH" and a.region
+                    else f"Consider organizing a targeted diabetes screening camp in the community."
+                    if not a.region and a.test_name == "HbA1c"
+                    else f"Organize a free lipid profiling and cardiovascular health camp."
+                    if not a.region and a.test_name == "Cholesterol"
+                    else f"Distribute iron supplements and organize nutritional counseling."
+                    if not a.region and a.test_name == "Hemoglobin"
+                    else f"Arrange a thyroid disorder awareness and diagnostic screening camp."
+                    if not a.region and a.test_name == "TSH"
+                    else "Monitor local intake logs and screen the target population for active clinical symptoms."
+                )
             }
-            for a in generate_community_alerts(time_period=time_period)
+            for a in generate_community_alerts(time_period=time_period, use_dp=use_dp)
         ],
         "available_tests": get_all_test_names(),
         "forecast": forecast_abnormal_trend(days_ahead=30),

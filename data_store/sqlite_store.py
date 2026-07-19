@@ -27,6 +27,221 @@ def _apply_laplace_noise(val: float, sensitivity: float = 1.0, epsilon: float = 
     return val + noise
 
 
+def seed_mock_data():
+    """Seed the database with 30 days of historical reports to enable forecasting and EARS alerts."""
+    with get_connection() as conn:
+        # Check if already seeded
+        try:
+            row = conn.execute("SELECT COUNT(*) as cnt FROM reports").fetchone()
+            if row and row["cnt"] > 0:
+                return
+        except sqlite3.OperationalError:
+            # Table doesn't exist yet, we will init_db first which calls this
+            return
+
+        print("[DATABASE] Seeding mock historical data for forecasting and ESSENCE alerts...")
+        
+        # We will insert reports and lab values for the last 30 days
+        base_date = datetime.now() - timedelta(days=30)
+        
+        tests = [
+            {"name": "Hemoglobin", "low": 12.0, "high": 16.0, "unit": "g/dL", "normal_val": 14.0, "abnormal_val": 10.5},
+            {"name": "HbA1c", "low": 4.0, "high": 5.6, "unit": "%", "normal_val": 5.2, "abnormal_val": 7.8},
+            {"name": "Cholesterol", "low": 100.0, "high": 199.0, "unit": "mg/dL", "normal_val": 160.0, "abnormal_val": 240.0},
+            {"name": "TSH", "low": 0.45, "high": 4.5, "unit": "uIU/mL", "normal_val": 1.8, "abnormal_val": 8.5}
+        ]
+        
+        regions = ["Urban-Central", "Rural-East", "Suburban-West", "Coastal-South"]
+        age_groups = ["0-18", "19-30", "31-45", "46-60", "60+"]
+        
+        # Seed 30 days of baseline data
+        for d in range(30):
+            current_day = base_date + timedelta(days=d)
+            timestamp_str = current_day.isoformat()
+            
+            # 2-3 reports per day
+            for r_idx in range(random.randint(2, 3)):
+                report_id = str(uuid.uuid4())
+                region = random.choice(regions)
+                age = random.choice(age_groups)
+                
+                # Create lab values
+                lab_values = []
+                abnormal_cnt = 0
+                normal_cnt = 0
+                
+                for t in tests:
+                    # Normally 15% abnormal rate in baseline
+                    is_abnormal = random.random() < 0.15
+                    # Exclude HbA1c spike in Urban-Central/46-60 during baseline
+                    if t["name"] == "HbA1c" and region == "Urban-Central" and age == "46-60":
+                        is_abnormal = False
+                        
+                    val = t["abnormal_val"] if is_abnormal else t["normal_val"]
+                    flag = "HIGH" if val > t["high"] else "LOW" if val < t["low"] else "NORMAL"
+                    severity = 1 if flag != "NORMAL" else 0
+                    
+                    if severity > 0:
+                        abnormal_cnt += 1
+                    else:
+                        normal_cnt += 1
+                        
+                    lab_values.append((
+                        str(uuid.uuid4()), report_id, t["name"], val, t["unit"],
+                        t["low"], t["high"], flag, severity, timestamp_str, region, age
+                    ))
+                
+                # Insert report
+                conn.execute(
+                    """INSERT INTO reports (id, filename, upload_timestamp, total_tests,
+                       normal_count, abnormal_count, critical_count, risk_score,
+                       anonymized_region, age_group, mode)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (report_id, f"simulated_report_{d}_{r_idx}.pdf", timestamp_str, len(tests),
+                     normal_cnt, abnormal_cnt, 0, abnormal_cnt * 1.5, region, age, "community")
+                )
+                
+                # Insert lab values
+                conn.executemany(
+                    """INSERT INTO lab_values (id, report_id, test_name, value, unit,
+                       reference_low, reference_high, flag, severity, timestamp,
+                       anonymized_region, age_group)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    lab_values
+                )
+        
+        # Now, create a spike (aberration) in the last 2 days:
+        # HbA1c anomalies in Urban-Central region for 46-60 age group!
+        for d in [28, 29]:
+            current_day = base_date + timedelta(days=d)
+            timestamp_str = current_day.isoformat()
+            
+            # Insert 5 additional reports for this specific cluster with abnormal HbA1c
+            for r_idx in range(5):
+                report_id = str(uuid.uuid4())
+                region = "Urban-Central"
+                age = "46-60"
+                
+                # Create abnormal HbA1c record
+                hba1c_test = tests[1] # HbA1c
+                
+                conn.execute(
+                    """INSERT INTO reports (id, filename, upload_timestamp, total_tests,
+                       normal_count, abnormal_count, critical_count, risk_score,
+                       anonymized_region, age_group, mode)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (report_id, f"spike_report_{d}_{r_idx}.pdf", timestamp_str, 1,
+                     0, 1, 0, 3.0, region, age, "community")
+                )
+                
+                conn.execute(
+                    """INSERT INTO lab_values (id, report_id, test_name, value, unit,
+                       reference_low, reference_high, flag, severity, timestamp,
+                       anonymized_region, age_group)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (str(uuid.uuid4()), report_id, hba1c_test["name"], hba1c_test["abnormal_val"],
+                     hba1c_test["unit"], hba1c_test["low"], hba1c_test["high"], "HIGH", 1,
+                     timestamp_str, region, age)
+                )
+        
+        print("[DATABASE] Seeding complete! Outbreak spike seeded for HbA1c in Urban-Central (46-60).")
+
+
+def detect_epidemiological_aberrations(use_dp: bool = True) -> list[dict]:
+    """
+    ESSENCE-inspired Spatiotemporal Aberration Detection (Z-score C2 algorithm).
+    Detects sudden increases in abnormal rate velocity for specific test x region x age clusters.
+    """
+    alerts = []
+    
+    with get_connection() as conn:
+        # Get all distinct test x region x age combinations
+        clusters = conn.execute("""
+            SELECT DISTINCT test_name, anonymized_region as region, age_group
+            FROM lab_values
+            WHERE anonymized_region != '' AND age_group != '' AND test_name != ''
+        """).fetchall()
+        
+    for cluster in clusters:
+        test_name = cluster["test_name"]
+        region = cluster["region"]
+        age_group = cluster["age_group"]
+        
+        # Fetch daily count of abnormalities for this cluster over last 30 days
+        with get_connection() as conn:
+            daily_data = conn.execute("""
+                SELECT 
+                    DATE(timestamp) as date,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal
+                FROM lab_values
+                WHERE test_name = ? AND anonymized_region = ? AND age_group = ?
+                GROUP BY DATE(timestamp)
+                ORDER BY date ASC
+            """, [test_name, region, age_group]).fetchall()
+            
+        if len(daily_data) < 10:
+            continue # Need sufficient baseline data
+            
+        # Convert to daily list of abnormal counts
+        history = [row["abnormal"] if row["abnormal"] is not None else 0 for row in daily_data]
+        
+        # We split the history into:
+        # - Evaluation period: last 2 days
+        # - Guard band: 2 days (index -4 to -3) to prevent the spike from inflating baseline std dev
+        # - Baseline period: everything preceding (index 0 to -5)
+        evaluation_vals = history[-2:]
+        baseline_vals = history[:-4]
+        
+        if not baseline_vals:
+            continue
+            
+        # Calculate mean and standard deviation of baseline
+        n = len(baseline_vals)
+        mean_val = sum(baseline_vals) / n
+        variance = sum((x - mean_val) ** 2 for x in baseline_vals) / n
+        std_dev = math.sqrt(variance)
+        
+        # Ensure standard deviation is not zero to avoid division by zero
+        if std_dev < 0.5:
+            std_dev = 0.5
+            
+        # Evaluate the average count in the evaluation period
+        current_val = sum(evaluation_vals) / len(evaluation_vals)
+        
+        # Calculate Z-score
+        z_score = (current_val - mean_val) / std_dev
+        
+        # Apply Differential Privacy noise to the Z-score calculation if requested
+        if use_dp:
+            z_score = _apply_laplace_noise(z_score, sensitivity=0.5, epsilon=0.5)
+            
+        # Trigger levels:
+        # Z > 3.0: High-alert (Critical Outbreak Spike)
+        # Z > 2.0: Warning (Mild Deviation)
+        if z_score >= 2.0:
+            severity = "critical" if z_score >= 3.0 else "warning"
+            alert_msg = (
+                f"🚨 ESSENCE Alert: Statistically significant spike in abnormal {test_name} "
+                f"detected in {region} among age group {age_group}. "
+                f"Aberration velocity: Z-score = {z_score:.2f}."
+            )
+            alerts.append({
+                "test_name": test_name,
+                "region": region,
+                "age_group": age_group,
+                "z_score": round(z_score, 2),
+                "severity": severity,
+                "message": alert_msg,
+                "current_average": round(current_val, 1),
+                "baseline_mean": round(mean_val, 1)
+            })
+            
+    # Sort by Z-score descending
+    alerts.sort(key=lambda x: x["z_score"], reverse=True)
+    return alerts
+
+
 @contextmanager
 def get_connection():
     """Context manager for SQLite connections."""
@@ -82,6 +297,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_lab_age ON lab_values(age_group);
             CREATE INDEX IF NOT EXISTS idx_report_timestamp ON reports(upload_timestamp);
         """)
+    seed_mock_data()
 
 
 # ---------- INSERT OPERATIONS ----------
@@ -337,22 +553,17 @@ def get_age_group_summary(time_period: str = None, use_dp: bool = True) -> list[
         return results
 
 
-def generate_community_alerts(time_period: str = None, threshold: float = 20.0) -> list[CommunityAlert]:
+def generate_community_alerts(time_period: str = None, threshold: float = 20.0, use_dp: bool = True) -> list[CommunityAlert]:
     """
     Generate community-level health alerts.
 
-    Flags tests where the abnormal percentage exceeds the threshold.
-
-    Args:
-        time_period: Optional ISO date string to filter.
-        threshold: Minimum abnormal percentage to trigger an alert.
-
-    Returns:
-        List of CommunityAlert objects.
+    Flags tests where the abnormal percentage exceeds the threshold,
+    and calculates spatiotemporal aberrations (CDC EARS C2).
     """
     alerts = []
     top_abnormal = get_top_abnormal_tests(n=20, time_period=time_period)
 
+    # 1. Volume-based static alerts
     for item in top_abnormal:
         if item["percentage"] >= threshold:
             severity = "critical" if item["percentage"] >= 40 else "warning"
@@ -361,7 +572,7 @@ def generate_community_alerts(time_period: str = None, threshold: float = 20.0) 
                 alert_type=f"elevated_{item['test_name'].lower().replace(' ', '_')}",
                 test_name=item["test_name"],
                 percentage=item["percentage"],
-                total_reports=get_total_reports(),
+                total_reports=get_total_reports(use_dp=use_dp),
                 affected_reports=item["flag_count"],
                 time_period=time_period or "all_time",
                 region=None,
@@ -374,6 +585,28 @@ def generate_community_alerts(time_period: str = None, threshold: float = 20.0) 
                 generated_at=datetime.now().isoformat(),
             )
             alerts.append(alert)
+
+    # 2. Spatiotemporal EARS Aberration alerts (ESSENCE Framework)
+    try:
+        aberrations = detect_epidemiological_aberrations(use_dp=use_dp)
+        for aa in aberrations:
+            alert = CommunityAlert(
+                id=str(uuid.uuid4()),
+                alert_type=f"aberration_{aa['test_name'].lower().replace(' ', '_')}",
+                test_name=aa["test_name"],
+                percentage=aa["z_score"],  # Store Z-score as percentage for dashboard mapping
+                total_reports=get_total_reports(use_dp=use_dp),
+                affected_reports=int(aa["current_average"]),
+                time_period="last_30_days",
+                region=aa["region"],
+                age_group=aa["age_group"],
+                severity=aa["severity"],
+                message=aa["message"],
+                generated_at=datetime.now().isoformat(),
+            )
+            alerts.append(alert)
+    except Exception as e:
+        print(f"[ALERTS] Failed to compute spatiotemporal aberrations: {e}")
 
     return alerts
 

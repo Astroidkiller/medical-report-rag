@@ -162,18 +162,7 @@ async def get_community_dashboard(use_dp: bool = Query(True)):
     Retrieves aggregated population statistics, alert signals, and demographic
     summaries with Differential Privacy Laplace noise.
     """
-    # Fetch base dashboard data structure
-    dash_data = get_dashboard_data()
-
-    # Inject DP versions of metrics
-    dash_data["metrics"]["total_reports"] = get_total_reports(use_dp=use_dp)
-    dash_data["metrics"]["total_lab_values"] = get_total_lab_values(use_dp=use_dp)
-    dash_data["metrics"]["abnormal_rate"] = get_abnormal_rate(use_dp=use_dp)
-
-    # Inject DP region & age breakdowns
-    dash_data["region_summary"] = get_region_summary(use_dp=use_dp)
-    dash_data["age_group_summary"] = get_age_group_summary(use_dp=use_dp)
-
+    dash_data = get_dashboard_data(use_dp=use_dp)
     return dash_data
 
 
