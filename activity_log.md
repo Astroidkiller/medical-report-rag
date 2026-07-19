@@ -35,7 +35,8 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **TRIP-RAG Selective Entity Anonymization:** Added `core/anonymizer.py` and integrated it in `agents/extraction_agent.py` to scrub patient names, referring doctors, email addresses, phone numbers, and physical addresses from raw text before chunking and vector storage, preventing PHI leakage in downstream semantic search.
 *   **Collapsible Sidebar & Mobile Responsiveness:** Built a slide-to-hide sidebar collapse feature in React (`App.jsx` & `index.css`) with a floating toggle control button (anchored to the right border line), and added responsive media queries for Apple iPhone & Android Samsung screen ratios (stacking metrics in 1/2 columns and translating the sidebar into a sliding slide-out drawer on narrow screens).
 *   **ESSENCE-inspired Aberration Detection & Historical Seeding:** Implemented a CDC EARS C2-inspired Z-score spatiotemporal aberration algorithm in `data_store/sqlite_store.py` to identify rapid spikes/velocities of anomalies across region x age demographics, and built a database initialization seeder that populates 30 days of mock historical reports and a target HbA1c spike in Urban-Central, rendering full charts and alerts on first load.
-
+*   **Free Hospital/Pharmacy Map & First Aid Widgets:** Added a keyless Leaflet.js locator map (fetching geolocation coordinates and displaying nearest medical points) and an interactive First Aid Guide (addressing cardiac arrest, seizures, snake bites, bleeding, choking) below the upload panel in Patient Mode.
+*   **Sticky Split Clinical Layout:** Redesigned active/inactive sidebar pills to avoid background blending and lock the menu to `100vh`, and refactored the ingested Patient Dashboard into a 2-column workstation split (report parameters on the left, sticky RAG chat floating on the right).
 
 ---
 
@@ -43,6 +44,9 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `4bd8992` | feat: implement medical locator, first aid guide, sidebar style fix, and sticky split chat layout | Pushed locator map, first aid guide, sidebar pill fixes, and split sticky chat |
+| `8b5b7e4` | fix: resolve React TypeError on trendData.forecast.map by mapping forecast_data | Fixed white screen crash on community dashboard render |
+| `f65e4bb` | feat: implement ESSENCE-inspired spatiotemporal aberration detection and historical db seeding | Added EARS Z-score calculations and 30-day mock seeding |
 | `9a1646c` | Simplify AI summaries: plain language, clean headings, no emojis | Updated patient summary prompts in `risk_agent.py` |
 | `21bc392` | fix: Update default model to gemini-2.5-flash & embeddings | Upgraded model defaults and masked API keys in errors |
 | `b40a12b` | fix: mask API key in all error messages to prevent leakage | Hardened security in REST call exceptions |
