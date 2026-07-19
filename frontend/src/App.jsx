@@ -40,69 +40,22 @@ const PlotlyChart = ({ id, data, layout }) => {
 };
 
 
-// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS, DYNAMIC IP GEOLOCATION, & OSM GEODECODER)
+// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS & NOMINATIM GEODECODER WITH DISAMBIGUATION)
 const LeafletMap = () => {
   const mapRef = React.useRef(null);
   const userMarkerRef = React.useRef(null);
   const markersGroupRef = React.useRef(null);
   
   const [mapType, setMapType] = React.useState('hospitals'); // 'hospitals' or 'pharmacies'
-  const [userLocation, setUserLocation] = React.useState([28.6139, 77.2090]); // Default to New Delhi
+  const [userLocation, setUserLocation] = React.useState([28.6139, 77.2090]); // Default New Delhi center
   const [places, setPlaces] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchingLocation, setSearchingLocation] = React.useState(false);
-  
-  // 1. Initial location lookup on mount (Geolocation + IP Fallbacks)
-  React.useEffect(() => {
-    const fetchIpLocation = () => {
-      fetch('https://ipinfo.io/json')
-        .then(res => {
-          if (!res.ok) throw new Error("ipinfo failed");
-          return res.json();
-        })
-        .then(data => {
-          if (data && data.loc) {
-            const coords = data.loc.split(',').map(parseFloat);
-            if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-              setUserLocation(coords);
-              return;
-            }
-          }
-          throw new Error("Invalid ipinfo data");
-        })
-        .catch(err => {
-          console.warn("ipinfo.io failed, trying ipapi.co...", err);
-          fetch('https://ipapi.co/json/')
-            .then(res => res.json())
-            .then(data => {
-              if (data && data.latitude && data.longitude) {
-                setUserLocation([data.latitude, data.longitude]);
-              }
-            })
-            .catch(err2 => {
-              console.warn("All IP geolocators failed. Keeping default New Delhi.");
-            });
-        });
-    };
+  const [disambiguationOptions, setDisambiguationOptions] = React.useState([]);
+  const [hasSearched, setHasSearched] = React.useState(false);
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation([position.coords.latitude, position.coords.longitude]);
-        },
-        (error) => {
-          console.warn("Browser geolocation failed. Fetching IP location...");
-          fetchIpLocation();
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      fetchIpLocation();
-    }
-  }, []);
-
-  // 2. Map Initialization effect (Runs once)
+  // 1. Map Initialization effect (Runs once)
   React.useEffect(() => {
     if (window.L && !mapRef.current) {
       const map = window.L.map('leaflet-map-container', { zoomControl: false }).setView(userLocation, 14);
@@ -125,7 +78,7 @@ const LeafletMap = () => {
       });
       userMarkerRef.current = window.L.marker(userLocation, { icon: userIcon })
         .addTo(map)
-        .bindPopup("<b>Your Location</b>")
+        .bindPopup("<b>Selected Search Center</b>")
         .openPopup();
     }
 
@@ -139,19 +92,21 @@ const LeafletMap = () => {
     };
   }, []);
 
-  // 3. User Location Sync Effect
+  // 2. User Location Sync Effect (pans to selected location)
   React.useEffect(() => {
     if (mapRef.current) {
       mapRef.current.setView(userLocation, 14);
       
       if (userMarkerRef.current) {
         userMarkerRef.current.setLatLng(userLocation);
+        userMarkerRef.current.bindPopup("<b>Selected Search Center</b>").openPopup();
       }
     }
   }, [userLocation]);
 
-  // 4. Fetch Places from Overpass API (OpenStreetMap) near userLocation
+  // 3. Fetch Places near userLocation (Only fetch if user has searched!)
   React.useEffect(() => {
+    if (!hasSearched) return;
     const lat = userLocation[0];
     const lon = userLocation[1];
     setLoading(true);
@@ -226,12 +181,11 @@ const LeafletMap = () => {
       console.warn("Overpass API failed, using fallback:", err);
       useFallbackMockPlaces();
     });
-  }, [userLocation, mapType]);
+  }, [userLocation, mapType, hasSearched]);
 
-  // 5. Sync Markers Layer when places updates
+  // 4. Sync Markers Layer when places updates
   React.useEffect(() => {
     if (window.L && markersGroupRef.current && mapRef.current) {
-      // Clear old place markers
       markersGroupRef.current.clearLayers();
       
       places.forEach((place) => {
@@ -249,20 +203,35 @@ const LeafletMap = () => {
     }
   }, [places]);
 
-  // 6. Handle Geocoding Search (using free Nominatim OSM Geocoder)
+  // 5. Handle Nominatim geocoding search (supports spelling errors and multiple city selections)
   const handleSearchLocation = () => {
     if (!searchQuery.trim()) return;
     setSearchingLocation(true);
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`)
+    setDisambiguationOptions([]);
+    
+    // We query Nominatim with address details to help disambiguate cities/countries
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(searchQuery)}`)
       .then(res => res.json())
       .then(data => {
         setSearchingLocation(false);
         if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
-          setUserLocation([lat, lon]);
+          // Parse results to filter out duplicates or similar records
+          const candidates = data.map(item => ({
+            display_name: item.display_name,
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon)
+          }));
+          
+          if (candidates.length === 1) {
+            // Found exactly 1 match
+            setUserLocation([candidates[0].lat, candidates[0].lon]);
+            setHasSearched(true);
+          } else {
+            // Found multiple matches - show selection list to user
+            setDisambiguationOptions(candidates.slice(0, 4)); // Keep top 4 candidates
+          }
         } else {
-          alert("Location not found. Please try another search term (e.g. city, area, or zip code).");
+          alert("Location not found. Please check spelling or type a more specific city/zip code.");
         }
       })
       .catch(err => {
@@ -275,7 +244,7 @@ const LeafletMap = () => {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#104891' }}>
-          <span>📍</span> Nearby Medical Centers
+          <span>📍</span> Medical Locator
         </h4>
         <div style={{ display: 'flex', gap: '4px', background: '#eae1d8', padding: '2px', borderRadius: '6px' }}>
           <button
@@ -313,17 +282,17 @@ const LeafletMap = () => {
         </div>
       </div>
 
-      {/* Address / Location Manual Search input */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+      {/* Geocoding Search Bar */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
         <input
           type="text"
-          placeholder="Type address, city, or zip code..."
+          placeholder="Enter your city or area name (e.g. Bangalore, mumbay)..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearchLocation()}
           style={{
             flexGrow: 1,
-            padding: '6px 12px',
+            padding: '8px 12px',
             fontSize: '0.8rem',
             border: '1px solid #dcd1c4',
             borderRadius: '6px',
@@ -336,7 +305,7 @@ const LeafletMap = () => {
           onClick={handleSearchLocation}
           disabled={searchingLocation}
           style={{
-            padding: '6px 12px',
+            padding: '8px 16px',
             fontSize: '0.8rem',
             background: '#104891',
             color: '#ffffff',
@@ -350,11 +319,66 @@ const LeafletMap = () => {
           {searchingLocation ? 'Searching...' : 'Search'}
         </button>
       </div>
+
+      {/* Disambiguation Dropdown Confirmation Box */}
+      {disambiguationOptions.length > 0 && (
+        <div style={{
+          background: '#fef9f3',
+          border: '1px solid #ebdcd0',
+          borderRadius: '8px',
+          padding: '12px',
+          marginBottom: '10px',
+          fontSize: '0.8rem'
+        }}>
+          <div style={{ fontWeight: 600, color: '#e83a30', marginBottom: '6px' }}>
+            ❓ Multiple cities found. Did you mean:
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {disambiguationOptions.map((opt, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  setUserLocation([opt.lat, opt.lon]);
+                  setHasSearched(true);
+                  setDisambiguationOptions([]);
+                  setSearchQuery('');
+                }}
+                style={{
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  background: '#ffffff',
+                  border: '1px solid #dcd1c4',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.76rem',
+                  color: '#242424',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#104891';
+                  e.currentTarget.style.background = '#f4f7fa';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#dcd1c4';
+                  e.currentTarget.style.background = '#ffffff';
+                }}
+              >
+                📍 {opt.display_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', height: '240px' }}>
         <div id="leaflet-map-container" style={{ borderRadius: '8px', border: '1px solid #dcd1c4', height: '100%', zIndex: 1 }}></div>
         <div style={{ overflowY: 'auto', maxHeight: '240px', paddingRight: '4px' }}>
-          {loading ? (
+          {!hasSearched ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '16px', textAlign: 'center', color: '#5e6b7c', fontSize: '0.82rem', minHeight: '180px' }}>
+              <span>🔍</span>
+              <span style={{ marginTop: '8px' }}>Type your city or area name above to view local hospitals or pharmacies.</span>
+            </div>
+          ) : loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '10px', color: '#5e6b7c', fontSize: '0.85rem', minHeight: '180px' }}>
               <RefreshCw className="animate-spin" size={24} style={{ color: mapType === 'hospitals' ? '#104891' : '#16c79e' }} />
               <span>Scanning area for local medical units...</span>
