@@ -16,12 +16,13 @@ services:
       - key: GEMINI_API_KEY
         sync: false
 
-staticSites:
   # 2. Vite React Frontend Service (Static Site)
-  - name: medical-report-rag-frontend
+  - type: web
+    name: medical-report-rag-frontend
+    runtime: static
     plan: free
     buildCommand: cd frontend && npm install && npm run build
-    publishDir: frontend/dist
+    staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
         value: https://medical-report-rag-backend.onrender.com/api
