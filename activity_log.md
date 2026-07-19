@@ -39,6 +39,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **Sticky Split Clinical Layout:** Redesigned active/inactive sidebar pills to avoid background blending and lock the menu to `100vh`, and refactored the ingested Patient Dashboard into a 2-column workstation split (report parameters on the left, sticky RAG chat floating on the right).
 *   **Fixed Desktop Sidebar & Map Redirects:** Reconfigured the sidebar layout to `position: fixed` to completely prevent the menu from scrolling away on long dashboards, and made the hospital and pharmacy listing cards clickable, redirecting to active directions via Google Maps query URLs.
 *   **Centered Dashboard Panel Alignment:** Reverted `.dashboard-main` margins to `0 auto` to keep it perfectly centered on the screen, moving the fixed sidebar offset shift to dynamic `padding-left` toggling on the outer `.stApp-container` wrapper.
+*   **OSM Overpass API Integration:** Replaced the local mock clinic locations with a dynamic OpenStreetMap Overpass API POST interpreter. The app now fetches real nearby hospital, clinic, and pharmacy coordinates relative to the user's active browser geolocation, sorts them by distance, and updates Leaflet map markers.
 
 ---
 
@@ -46,6 +47,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `3dd4137` | feat: query OpenStreetMap Overpass API for real nearby clinics and pharmacies | Integrated dynamic OSM Overpass API node queries on map |
 | `7124ca6` | fix: resolve dashboard-main shifting by offset padding-left on outer stApp-container | Fixed container centering issues during sidebar toggle events |
 | `c0f837c` | feat: make sidebar layout fixed desktop-side and add map navigation redirect links | Locked sidebar position and added LeafletMap anchor navigation links |
 | `4bd8992` | feat: implement medical locator, first aid guide, sidebar style fix, and sticky split chat layout | Pushed locator map, first aid guide, sidebar pill fixes, and split sticky chat |
