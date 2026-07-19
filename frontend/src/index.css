@@ -56,6 +56,10 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   box-shadow: 4px 0 20px rgba(16, 72, 145, 0.03);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  box-sizing: border-box;
 }
 
 .sidebar-title {
@@ -89,17 +93,24 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
+  background: #fdfaf7;
+  border: 1px solid #ebdcd0;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(16, 72, 145, 0.02);
   transition: var(--transition-smooth);
 }
 
 .nav-item:hover {
   background: var(--primary-brand-soft);
   color: var(--primary-brand);
+  border-color: var(--primary-brand-light);
 }
 
 .nav-item.active {
   background: var(--primary-brand);
   color: #ffffff;
+  border-color: var(--primary-brand);
+  box-shadow: 0 4px 12px rgba(16, 72, 145, 0.15);
 }
 
 .sidebar-divider {
@@ -690,6 +701,74 @@ h1, h2, h3, h4, h5, h6 {
   
   .app-hero h1 {
     font-size: 1.5rem !important;
+  }
+}
+
+.quick-utilities-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+  margin-top: 28px;
+  margin-bottom: 28px;
+}
+
+.utility-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-premium);
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .quick-utilities-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.patient-workspace-layout {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 28px;
+  align-items: start;
+  margin-top: 20px;
+}
+
+.patient-details-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.patient-chat-panel {
+  position: sticky;
+  top: 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-premium);
+  box-sizing: border-box;
+}
+
+.patient-chat-panel .chat-container {
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 0;
+}
+
+.patient-chat-panel .chat-history {
+  height: 480px;
+}
+
+@media (max-width: 1024px) {
+  .patient-workspace-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .patient-chat-panel {
+    position: static;
   }
 }
 

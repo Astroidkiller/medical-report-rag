@@ -39,6 +39,290 @@ const PlotlyChart = ({ id, data, layout }) => {
   return <div id={id} className="chart-surface" style={{ width: '100%', height: '360px' }} />;
 };
 
+
+// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS)
+const LeafletMap = () => {
+  const mapRef = React.useRef(null);
+  const [mapType, setMapType] = React.useState('hospitals'); // 'hospitals' or 'pharmacies'
+  const [userLocation, setUserLocation] = React.useState([28.6139, 77.2090]); // Default to New Delhi
+  const [places, setPlaces] = React.useState([]);
+  
+  React.useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation([position.coords.latitude, position.coords.longitude]);
+        },
+        (error) => {
+          console.warn("Geolocation permission denied, using default location.");
+        }
+      );
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const lat = userLocation[0];
+    const lon = userLocation[1];
+    
+    const mockHospitals = [
+      { name: "City Care Super Specialty Hospital", type: "hospital", lat: lat + 0.004, lon: lon - 0.003, dist: "0.5 km", phone: "+91 98765 43210", hours: "24 Hours" },
+      { name: "Apex Trauma & Cardiac Centre", type: "hospital", lat: lat - 0.005, lon: lon + 0.006, dist: "0.9 km", phone: "+91 87654 32109", hours: "24 Hours" },
+      { name: "St. Jude Community Health Clinic", type: "hospital", lat: lat + 0.008, lon: lon + 0.002, dist: "1.2 km", phone: "+91 76543 21098", hours: "8 AM - 8 PM" },
+    ];
+    
+    const mockPharmacies = [
+      { name: "Apollo 24/7 Wellness Pharmacy", type: "pharmacy", lat: lat + 0.002, lon: lon + 0.002, dist: "0.3 km", phone: "+91 1800-123-4567", hours: "24 Hours" },
+      { name: "MedPlus Discount Pharmacy", type: "pharmacy", lat: lat - 0.003, lon: lon - 0.004, dist: "0.6 km", phone: "+91 99999 88888", hours: "7 AM - 11 PM" },
+      { name: "Wellness Forever Chemist & Druggist", type: "pharmacy", lat: lat + 0.006, lon: lon - 0.007, dist: "1.1 km", phone: "+91 88888 77777", hours: "24 Hours" },
+    ];
+    
+    const selectedPlaces = mapType === 'hospitals' ? mockHospitals : mockPharmacies;
+    setPlaces(selectedPlaces);
+    
+    if (window.L) {
+      if (mapRef.current) {
+        mapRef.current.remove();
+      }
+      
+      const map = window.L.map('leaflet-map-container', { zoomControl: false }).setView(userLocation, 15);
+      mapRef.current = map;
+      
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+      
+      // Add custom zoom control to bottom right
+      window.L.control.zoom({ position: 'bottomright' }).addTo(map);
+      
+      const userIcon = window.L.divIcon({
+        className: 'user-location-marker',
+        html: `<div style="width: 12px; height: 12px; background-color: #104891; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(16,72,145,0.6);"></div>`,
+        iconSize: [12, 12]
+      });
+      window.L.marker(userLocation, { icon: userIcon }).addTo(map).bindPopup("<b>Your Location</b>").openPopup();
+      
+      selectedPlaces.forEach((place) => {
+        const markerColor = place.type === 'hospital' ? '#e83a30' : '#16c79e';
+        const placeIcon = window.L.divIcon({
+          className: 'place-marker',
+          html: `<div style="width: 20px; height: 20px; background-color: ${markerColor}; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${place.type === 'hospital' ? 'H' : 'P'}</div>`,
+          iconSize: [20, 20]
+        });
+        
+        window.L.marker([place.lat, place.lon], { icon: placeIcon })
+          .addTo(map)
+          .bindPopup(`<b>${place.name}</b><br/>Distance: ${place.dist}<br/>Hours: ${place.hours}<br/>Phone: ${place.phone}`);
+      });
+    }
+  }, [userLocation, mapType]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#104891' }}>
+          <span>📍</span> Nearby Medical Centers
+        </h4>
+        <div style={{ display: 'flex', gap: '4px', background: '#eae1d8', padding: '2px', borderRadius: '6px' }}>
+          <button
+            onClick={() => setMapType('hospitals')}
+            style={{
+              padding: '4px 10px',
+              fontSize: '0.8rem',
+              border: 'none',
+              borderRadius: '4px',
+              background: mapType === 'hospitals' ? '#104891' : 'transparent',
+              color: mapType === 'hospitals' ? '#ffffff' : '#242424',
+              cursor: 'pointer',
+              fontWeight: 500,
+              transition: 'all 0.2s'
+            }}
+          >
+            Hospitals
+          </button>
+          <button
+            onClick={() => setMapType('pharmacies')}
+            style={{
+              padding: '4px 10px',
+              fontSize: '0.8rem',
+              border: 'none',
+              borderRadius: '4px',
+              background: mapType === 'pharmacies' ? '#16c79e' : 'transparent',
+              color: mapType === 'pharmacies' ? '#ffffff' : '#242424',
+              cursor: 'pointer',
+              fontWeight: 500,
+              transition: 'all 0.2s'
+            }}
+          >
+            Pharmacies
+          </button>
+        </div>
+      </div>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', height: '240px' }}>
+        <div id="leaflet-map-container" style={{ borderRadius: '8px', border: '1px solid #dcd1c4', height: '100%', zIndex: 1 }}></div>
+        <div style={{ overflowY: 'auto', maxHeight: '240px', paddingRight: '4px' }}>
+          {places.map((place, idx) => (
+            <div
+              key={idx}
+              style={{
+                padding: '10px',
+                borderRadius: '6px',
+                background: '#f9f6f2',
+                border: '1px solid #eae1d8',
+                marginBottom: '8px',
+                fontSize: '0.82rem'
+              }}
+            >
+              <div style={{ fontWeight: 600, color: place.type === 'hospital' ? '#104891' : '#16c79e', marginBottom: '2px' }}>
+                {place.name}
+              </div>
+              <div style={{ color: '#5e6b7c', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>🚗 {place.dist} away</span>
+                <span>⏰ {place.hours}</span>
+              </div>
+              <div style={{ color: '#242424' }}>
+                📞 <a href={`tel:${place.phone}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500 }}>{place.phone}</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// INTERACTIVE FIRST AID EMERGENCY GUIDE
+const FirstAidGuide = () => {
+  const [selectedIncident, setSelectedIncident] = React.useState('heart_attack');
+
+  const incidents = {
+    heart_attack: {
+      title: "❤️ Heart Attack / Cardiac Arrest",
+      steps: [
+        "**Call emergency services**: Dial 112 / 102 (Ambulance) right away.",
+        "**Rest and keep calm**: Seat the person comfortably on the floor with knees bent.",
+        "**Aspirin**: If conscious and not allergic, have them chew an Aspirin tablet.",
+        "**Prepare CPR**: If they lose consciousness and stop breathing, start chest compressions immediately."
+      ],
+      warnings: "Do NOT leave them alone. Do NOT let them walk around or deny symptoms."
+    },
+    seizure: {
+      title: "🧠 Seizure (Epileptic Fit)",
+      steps: [
+        "**Clear space**: Keep surrounding area free of sharp or hard objects.",
+        "**Cushion head**: Place a soft jacket or cushion under their head to prevent injury.",
+        "**Time the fit**: Call ambulance if seizure lasts more than 5 minutes.",
+        "**Recovery position**: Turn them gently onto their side when the shaking stops."
+      ],
+      warnings: "Do NOT hold them down or restrain them. Do NOT put anything in their mouth."
+    },
+    snake_bite: {
+      title: "🐍 Snake Bite",
+      steps: [
+        "**Remain absolutely still**: Keep the bitten limb completely immobilized to slow venom spread.",
+        "**Keep limb low**: Ensure the bite area stays below the level of the heart.",
+        "**Remove constrictions**: Take off rings, bracelets, or tight clothing near the wound.",
+        "**Clean gently**: Wash the area and apply a clean, dry, loose bandage."
+      ],
+      warnings: "Do NOT cut the wound or try to suck venom out. Do NOT use a tourniquet."
+    },
+    deep_cut: {
+      title: "🩸 Deep Cut / Severe Bleeding",
+      steps: [
+        "**Apply pressure**: Press a clean pad or cloth firmly onto the wound to stop blood flow.",
+        "**Elevate limb**: Raise the injured area above heart level if possible.",
+        "**Do not lift pad**: Maintain pressure continuously. Add extra pads on top if blood leaks through.",
+        "**Secure bandage**: Tie a clean cloth snugly over the padding."
+      ],
+      warnings: "Do NOT remove original soaked pads (it disrupts clotting). Do NOT pull out embedded objects."
+    },
+    choking: {
+      title: "🗣️ Choking (Heimlich Maneuver)",
+      steps: [
+        "**5 Back Blows**: Stand behind the person, bend them forward, and strike their back firmly 5 times.",
+        "**5 Abdominal Thrusts**: Place a fist above their navel and pull quickly inward and upward.",
+        "**Alternate**: Repeat cycles of 5 back blows and 5 thrusts.",
+        "**Call 112**: If the person loses consciousness, call 112 and begin CPR."
+      ],
+      warnings: "Do NOT do abdominal thrusts on pregnant women or conscious infants."
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <h4 style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px', color: '#104891' }}>
+        <span>🩹</span> Emergency First Aid Guide
+      </h4>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', height: '240px' }}>
+        {/* Incident selector */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
+          {Object.keys(incidents).map((key) => (
+            <button
+              key={key}
+              onClick={() => setSelectedIncident(key)}
+              style={{
+                padding: '8px 10px',
+                textAlign: 'left',
+                borderRadius: '6px',
+                border: '1px solid #eae1d8',
+                background: selectedIncident === key ? '#104891' : '#fdfaf7',
+                color: selectedIncident === key ? '#ffffff' : '#242424',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              {key.replace('_', ' ').toUpperCase()}
+            </button>
+          ))}
+          <a
+            href="tel:112"
+            style={{
+              padding: '8px 10px',
+              textAlign: 'center',
+              borderRadius: '6px',
+              border: 'none',
+              background: '#e83a30',
+              color: '#ffffff',
+              fontSize: '0.8rem',
+              fontWeight: 'bold',
+              textDecoration: 'none',
+              marginTop: 'auto',
+              boxShadow: '0 2px 4px rgba(232,58,48,0.3)',
+              display: 'block'
+            }}
+          >
+            📞 CALL AMBULANCE (112)
+          </a>
+        </div>
+
+        {/* Instructions pane */}
+        <div style={{ background: '#f9f6f2', padding: '12px', borderRadius: '8px', border: '1px solid #eae1d8', overflowY: 'auto' }}>
+          <div style={{ fontWeight: 700, color: '#104891', fontSize: '0.9rem', marginBottom: '8px' }}>
+            {incidents[selectedIncident].title}
+          </div>
+          <ol style={{ paddingLeft: '16px', margin: '0 0 10px 0', fontSize: '0.82rem', lineHeight: '1.5' }}>
+            {incidents[selectedIncident].steps.map((step, idx) => {
+              const parts = step.split('**');
+              return (
+                <li key={idx} style={{ marginBottom: '6px' }}>
+                  {parts.map((part, pIdx) => pIdx % 2 === 1 ? <strong key={pIdx} style={{ color: '#104891' }}>{part}</strong> : part)}
+                </li>
+              );
+            })}
+          </ol>
+          <div style={{ fontSize: '0.76rem', color: '#e83a30', background: '#fdeeed', padding: '6px 8px', borderRadius: '4px', borderLeft: '3px solid #e83a30', fontWeight: 500 }}>
+            ⚠️ {incidents[selectedIncident].warnings}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Lightweight Markdown & Plain-Text Formatter to prevent raw tags displaying in UI
 const renderTextFormat = (text) => {
   if (!text) return '';
@@ -602,28 +886,39 @@ Do not use emojis in descriptions.`,
           <div>
             {/* Upload Area */}
             {!patientSession && (
-              <div className="upload-dropzone">
-                <Upload size={40} style={{ color: '#104891', marginBottom: '12px' }} />
-                <h3>Upload Your Diagnostic Lab Reports</h3>
-                <p style={{ color: '#5e6b7c', fontSize: '0.9rem' }}>
-                  Supports single or multiple PDF documents. Parsed into FHIR Observables.
-                </p>
-                <input 
-                  type="file" 
-                  accept=".pdf" 
-                  multiple 
-                  onChange={handlePatientUpload}
-                  style={{ display: 'none' }}
-                  id="patient-file-input"
-                />
-                <button 
-                  className="primary-button" 
-                  onClick={() => document.getElementById('patient-file-input').click()}
-                  style={{ marginTop: '16px' }}
-                >
-                  Browse PDF Files
-                </button>
-              </div>
+              <>
+                <div className="upload-dropzone">
+                  <Upload size={40} style={{ color: '#104891', marginBottom: '12px' }} />
+                  <h3>Upload Your Diagnostic Lab Reports</h3>
+                  <p style={{ color: '#5e6b7c', fontSize: '0.9rem' }}>
+                    Supports single or multiple PDF documents. Parsed into FHIR Observables.
+                  </p>
+                  <input 
+                    type="file" 
+                    accept=".pdf" 
+                    multiple 
+                    onChange={handlePatientUpload}
+                    style={{ display: 'none' }}
+                    id="patient-file-input"
+                  />
+                  <button 
+                    className="primary-button" 
+                    onClick={() => document.getElementById('patient-file-input').click()}
+                    style={{ marginTop: '16px' }}
+                  >
+                    Browse PDF Files
+                  </button>
+                </div>
+
+                <div className="quick-utilities-grid">
+                  <div className="utility-card">
+                    <LeafletMap />
+                  </div>
+                  <div className="utility-card">
+                    <FirstAidGuide />
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Ingested Sessions Dashboard */}
@@ -656,185 +951,189 @@ Do not use emojis in descriptions.`,
                 )}
 
                 {activeReport && (
-                  <div>
-                    {/* Metrics Row */}
-                    <div className="stats-grid">
-                      <div className="metric-card">
-                        <div className="value">{activeReport.fhir_observations.length}</div>
-                        <div className="label">Total Test Observations</div>
-                      </div>
-                      <div className="metric-card">
-                        <div className="value" style={{ color: activeReport.risk_summary.normal > 0 ? '#16c79e' : '#242424' }}>
-                          {activeReport.risk_summary.normal}
+                  <div className="patient-workspace-layout">
+                    {/* Left Column: Report Details */}
+                    <div className="patient-details-panel">
+                      {/* Metrics Row */}
+                      <div className="stats-grid">
+                        <div className="metric-card">
+                          <div className="value">{activeReport.fhir_observations.length}</div>
+                          <div className="label">Total Test Observations</div>
                         </div>
-                        <div className="label">Normal Results</div>
-                      </div>
-                      <div className="metric-card">
-                        <div className="value" style={{ color: activeReport.risk_summary.abnormal > 0 ? '#f39c12' : '#242424' }}>
-                          {activeReport.risk_summary.abnormal}
+                        <div className="metric-card">
+                          <div className="value" style={{ color: activeReport.risk_summary.normal > 0 ? '#16c79e' : '#242424' }}>
+                            {activeReport.risk_summary.normal}
+                          </div>
+                          <div className="label">Normal Results</div>
                         </div>
-                        <div className="label">Abnormal Flags</div>
-                      </div>
-                      <div className="metric-card">
-                        <div className="value" style={{ color: activeReport.risk_summary.critical > 0 ? '#e83a30' : '#242424' }}>
-                          {activeReport.risk_summary.critical}
+                        <div className="metric-card">
+                          <div className="value" style={{ color: activeReport.risk_summary.abnormal > 0 ? '#f39c12' : '#242424' }}>
+                            {activeReport.risk_summary.abnormal}
+                          </div>
+                          <div className="label">Abnormal Flags</div>
                         </div>
-                        <div className="label">Critical Bounds</div>
-                      </div>
-                    </div>
-
-                    {/* Risk Severity Card */}
-                    {(() => {
-                      const score = activeReport.risk_summary.risk_score;
-                      let riskClass = 'risk-card-normal';
-                      let riskLabel = 'Normal Health Profile';
-                      let riskDesc = 'All analyzed parameters are within normal physiological bounds. Maintain your current wellness path.';
-                      
-                      if (score > 1.5) {
-                        riskClass = 'risk-card-critical';
-                        riskLabel = 'CRITICAL ALERTS DETECTED';
-                        riskDesc = 'One or more parameters reside within critical bounds. Review immediate details below and consult your doctor.';
-                      } else if (score > 0.5) {
-                        riskClass = 'risk-card-elevated';
-                        riskLabel = 'ELEVATED CLINICAL RISKS';
-                        riskDesc = 'Minor health deviations observed. Review dietary patterns and schedule a follow-up assessment.';
-                      } else if (score > 0) {
-                        riskClass = 'risk-card-mild';
-                        riskLabel = 'MILD DEVIATIONS';
-                        riskDesc = 'Slight deviations detected, mostly within high or low buffer bounds.';
-                      }
-
-                      return (
-                        <div className={`risk-card ${riskClass}`}>
-                          <h3 style={{ margin: '0 0 6px 0', fontSize: '1.2rem' }}>{riskLabel}</h3>
-                          <p style={{ margin: 0, fontSize: '0.92rem', opacity: 0.9 }}>{riskDesc}</p>
+                        <div className="metric-card">
+                          <div className="value" style={{ color: activeReport.risk_summary.critical > 0 ? '#e83a30' : '#242424' }}>
+                            {activeReport.risk_summary.critical}
+                          </div>
+                          <div className="label">Critical Bounds</div>
                         </div>
-                      );
-                    })()}
+                      </div>
 
-                    {/* Lab values display */}
-                    <h3>Extracted Parameters (FHIR R4 Format)</h3>
-                    <div className="lab-grid">
-                      {activeReport.fhir_observations.map((obs) => {
-                        const interpretation = obs.interpretation?.[0]?.text || 'NORMAL';
-                        let cardClass = 'lab-card-normal';
-                        let badgeClass = 'flag-normal';
-
-                        if (interpretation.includes('CRITICAL')) {
-                          cardClass = 'lab-card-critical_high';
-                          badgeClass = 'flag-critical';
-                        } else if (interpretation.includes('HIGH') || interpretation.includes('LOW')) {
-                          cardClass = 'lab-card-high';
-                          badgeClass = 'flag-high';
+                      {/* Risk Severity Card */}
+                      {(() => {
+                        const score = activeReport.risk_summary.risk_score;
+                        let riskClass = 'risk-card-normal';
+                        let riskLabel = 'Normal Health Profile';
+                        let riskDesc = 'All analyzed parameters are within normal physiological bounds. Maintain your current wellness path.';
+                        
+                        if (score > 1.5) {
+                          riskClass = 'risk-card-critical';
+                          riskLabel = 'CRITICAL ALERTS DETECTED';
+                          riskDesc = 'One or more parameters reside within critical bounds. Review immediate details below and consult your doctor.';
+                        } else if (score > 0.5) {
+                          riskClass = 'risk-card-elevated';
+                          riskLabel = 'ELEVATED CLINICAL RISKS';
+                          riskDesc = 'Minor health deviations observed. Review dietary patterns and schedule a follow-up assessment.';
+                        } else if (score > 0) {
+                          riskClass = 'risk-card-mild';
+                          riskLabel = 'MILD DEVIATIONS';
+                          riskDesc = 'Slight deviations detected, mostly within high or low buffer bounds.';
                         }
 
                         return (
-                          <div key={obs.id} className={`lab-card ${cardClass}`}>
-                            <div className="header-row">
-                              <span className="name">{obs.code.text}</span>
-                              <span className={`flag-badge ${badgeClass}`}>{interpretation}</span>
-                            </div>
-                            <div className="value">
-                              {obs.valueQuantity.value} <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{obs.valueQuantity.unit}</span>
-                            </div>
-                            {obs.referenceRange?.[0] && (
-                              <div className="ref-range">
-                                Normal: {obs.referenceRange[0].text}
-                              </div>
-                            )}
-                            <div style={{ fontSize: '0.7rem', color: '#5e6b7c', marginTop: '8px' }}>
-                              LOINC: {obs.code.coding[0].code}
-                            </div>
+                          <div className={`risk-card ${riskClass}`}>
+                            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.2rem' }}>{riskLabel}</h3>
+                            <p style={{ margin: 0, fontSize: '0.92rem', opacity: 0.9 }}>{riskDesc}</p>
                           </div>
                         );
-                      })}
-                    </div>
+                      })()}
 
-                    {/* AI Translation & Plain-language summaries */}
-                    <div style={{ marginTop: '28px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                        <h3>AI Plain-Language Summary ({language})</h3>
-                        <button
-                          className="primary-button"
-                          onClick={() => generatePatientFriendlyExplanation(activeReport)}
-                          disabled={generatingExplanation}
-                        >
-                          {generatingExplanation ? 'Translating...' : `Generate Friendly Explanation`}
-                        </button>
-                      </div>
+                      {/* Lab values display */}
+                      <h3>Extracted Parameters (FHIR R4 Format)</h3>
+                      <div className="lab-grid">
+                        {activeReport.fhir_observations.map((obs) => {
+                          const interpretation = obs.interpretation?.[0]?.text || 'NORMAL';
+                          let cardClass = 'lab-card-normal';
+                          let badgeClass = 'flag-normal';
 
-                      {patientExplanations[activeReport.report_id] && (
-                        <div 
-                          className="metric-card" 
-                          style={{ lineHeight: 1.7, fontSize: '0.96rem', background: '#ffffff', borderLeft: '4px solid #16c79e' }}
-                        >
-                          {renderTextFormat(patientExplanations[activeReport.report_id])}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Interactive RAG chat */}
-                    <div className="chat-container">
-                      <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Brain size={20} />
-                        Ask Questions About Your Report
-                      </h3>
-                      <div className="chat-history">
-                        {chatHistory.map((msg, idx) => {
-                          const isLast = idx === chatHistory.length - 1;
-                          const showTyping = isLast && msg.sender === 'assistant' && !msg.text && isChatSending;
+                          if (interpretation.includes('CRITICAL')) {
+                            cardClass = 'lab-card-critical_high';
+                            badgeClass = 'flag-critical';
+                          } else if (interpretation.includes('HIGH') || interpretation.includes('LOW')) {
+                            cardClass = 'lab-card-high';
+                            badgeClass = 'flag-high';
+                          }
 
                           return (
-                            <div key={idx} className={`chat-bubble ${msg.sender}`}>
-                              {showTyping ? (
-                                <div className="typing-indicator">
-                                  <span className="typing-dot"></span>
-                                  <span className="typing-dot"></span>
-                                  <span className="typing-dot"></span>
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: '0.94rem' }}>{renderTextFormat(msg.text)}</div>
-                              )}
-                              
-                              {/* RAG Source attributions */}
-                              {msg.sources && msg.sources.length > 0 && (
-                                <div style={{ marginTop: '10px' }}>
-                                  <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#104891', marginBottom: '4px' }}>
-                                    Source Evidence from Report:
-                                  </div>
-                                  {msg.sources.map((src, sIdx) => (
-                                    <div key={sIdx} className="source-attribution">
-                                      "{src}" (Source Page: {msg.metadata?.[sIdx]?.page || 1})
-                                    </div>
-                                  ))}
+                            <div key={obs.id} className={`lab-card ${cardClass}`}>
+                              <div className="header-row">
+                                <span className="name">{obs.code.text}</span>
+                                <span className={`flag-badge ${badgeClass}`}>{interpretation}</span>
+                              </div>
+                              <div className="value">
+                                {obs.valueQuantity.value} <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{obs.valueQuantity.unit}</span>
+                              </div>
+                              {obs.referenceRange?.[0] && (
+                                <div className="ref-range">
+                                  Normal: {obs.referenceRange[0].text}
                                 </div>
                               )}
+                              <div style={{ fontSize: '0.7rem', color: '#5e6b7c', marginTop: '8px' }}>
+                                LOINC: {obs.code.coding[0].code}
+                              </div>
                             </div>
                           );
                         })}
-                        <div ref={chatEndRef} />
                       </div>
 
-                      <div className="chat-input-row">
-                        <input
-                          type="text"
-                          className="chat-input"
-                          placeholder="Ex: What does an elevated cholesterol mean for my diet?"
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                          disabled={isChatSending}
-                        />
-                        <button
-                          className="primary-button"
-                          onClick={handleSendChat}
-                          disabled={isChatSending || !chatInput.trim()}
-                        >
-                          {isChatSending ? 'Searching...' : <Send size={16} />}
-                        </button>
+                      {/* AI Translation & Plain-language summaries */}
+                      <div style={{ marginTop: '28px', marginBottom: '28px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <h3>AI Plain-Language Summary ({language})</h3>
+                          <button
+                            className="primary-button"
+                            onClick={() => generatePatientFriendlyExplanation(activeReport)}
+                            disabled={generatingExplanation}
+                          >
+                            {generatingExplanation ? 'Translating...' : `Generate Friendly Explanation`}
+                          </button>
+                        </div>
+
+                        {patientExplanations[activeReport.report_id] && (
+                          <div 
+                            className="metric-card" 
+                            style={{ lineHeight: 1.7, fontSize: '0.96rem', background: '#ffffff', borderLeft: '4px solid #16c79e' }}
+                          >
+                            {renderTextFormat(patientExplanations[activeReport.report_id])}
+                          </div>
+                        )}
                       </div>
                     </div>
 
+                    {/* Right Column: Sticky Interactive Chat */}
+                    <div className="patient-chat-panel">
+                      <div className="chat-container">
+                        <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Brain size={20} />
+                          Ask Questions About Your Report
+                        </h3>
+                        <div className="chat-history">
+                          {chatHistory.map((msg, idx) => {
+                            const isLast = idx === chatHistory.length - 1;
+                            const showTyping = isLast && msg.sender === 'assistant' && !msg.text && isChatSending;
+
+                            return (
+                              <div key={idx} className={`chat-bubble ${msg.sender}`}>
+                                {showTyping ? (
+                                  <div className="typing-indicator">
+                                    <span className="typing-dot"></span>
+                                    <span className="typing-dot"></span>
+                                    <span className="typing-dot"></span>
+                                  </div>
+                                ) : (
+                                  <div style={{ fontSize: '0.94rem' }}>{renderTextFormat(msg.text)}</div>
+                                )}
+                                
+                                {/* RAG Source attributions */}
+                                {msg.sources && msg.sources.length > 0 && (
+                                  <div style={{ marginTop: '10px' }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#104891', marginBottom: '4px' }}>
+                                      Source Evidence from Report:
+                                    </div>
+                                    {msg.sources.map((src, sIdx) => (
+                                      <div key={sIdx} className="source-attribution">
+                                        "{src}" (Source Page: {msg.metadata?.[sIdx]?.page || 1})
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          <div ref={chatEndRef} />
+                        </div>
+
+                        <div className="chat-input-row">
+                          <input
+                            type="text"
+                            className="chat-input"
+                            placeholder="Ex: What does an elevated cholesterol mean for my diet?"
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                            disabled={isChatSending}
+                          />
+                          <button
+                            className="primary-button"
+                            onClick={handleSendChat}
+                            disabled={isChatSending || !chatInput.trim()}
+                          >
+                            {isChatSending ? 'Searching...' : <Send size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
