@@ -40,6 +40,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **Fixed Desktop Sidebar & Map Redirects:** Reconfigured the sidebar layout to `position: fixed` to completely prevent the menu from scrolling away on long dashboards, and made the hospital and pharmacy listing cards clickable, redirecting to active directions via Google Maps query URLs.
 *   **Centered Dashboard Panel Alignment:** Reverted `.dashboard-main` margins to `0 auto` to keep it perfectly centered on the screen, moving the fixed sidebar offset shift to dynamic `padding-left` toggling on the outer `.stApp-container` wrapper.
 *   **OSM Overpass API Integration:** Replaced the local mock clinic locations with a dynamic OpenStreetMap Overpass API POST interpreter. The app now fetches real nearby hospital, clinic, and pharmacy coordinates relative to the user's active browser geolocation, sorts them by distance, and updates Leaflet map markers.
+*   **Multi-Tier Geolocation Resolver:** Configured a three-stage fallback system: browser geolocation (GPS), IP-based geolocating (`ipapi.co`) to locate users when coordinates are inaccurate or blocked, and a manual Search Box integrated with Nominatim geocoding to search any city, zip code, or address and re-center the map.
 
 ---
 
@@ -47,6 +48,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `1fc3a80` | feat: implement multi-tier geolocator (browser GPS, IP-based lookup, and Nominatim address search) | Added geolocator fallbacks and search bar |
 | `3dd4137` | feat: query OpenStreetMap Overpass API for real nearby clinics and pharmacies | Integrated dynamic OSM Overpass API node queries on map |
 | `7124ca6` | fix: resolve dashboard-main shifting by offset padding-left on outer stApp-container | Fixed container centering issues during sidebar toggle events |
 | `c0f837c` | feat: make sidebar layout fixed desktop-side and add map navigation redirect links | Locked sidebar position and added LeafletMap anchor navigation links |
