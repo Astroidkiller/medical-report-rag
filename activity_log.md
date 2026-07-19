@@ -34,6 +34,8 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **Encoding Fixes for Local Languages:** Configured explicit UTF-8 charsets on StreamingResponses in `main.py`, forced `resp.encoding = 'utf-8'` on the Google API stream requests in `core/llm_client.py` to prevent Python requests from defaulting to ISO-8859-1, and enabled `{ stream: true }` decoding state in frontend `TextDecoder` calls to prevent split multibyte character corruption (Mojibake) in Hindi, Tamil, etc.
 *   **TRIP-RAG Selective Entity Anonymization:** Added `core/anonymizer.py` and integrated it in `agents/extraction_agent.py` to scrub patient names, referring doctors, email addresses, phone numbers, and physical addresses from raw text before chunking and vector storage, preventing PHI leakage in downstream semantic search.
 *   **Collapsible Sidebar & Mobile Responsiveness:** Built a slide-to-hide sidebar collapse feature in React (`App.jsx` & `index.css`) with a floating toggle control button (anchored to the right border line), and added responsive media queries for Apple iPhone & Android Samsung screen ratios (stacking metrics in 1/2 columns and translating the sidebar into a sliding slide-out drawer on narrow screens).
+*   **ESSENCE-inspired Aberration Detection & Historical Seeding:** Implemented a CDC EARS C2-inspired Z-score spatiotemporal aberration algorithm in `data_store/sqlite_store.py` to identify rapid spikes/velocities of anomalies across region x age demographics, and built a database initialization seeder that populates 30 days of mock historical reports and a target HbA1c spike in Urban-Central, rendering full charts and alerts on first load.
+
 
 ---
 
