@@ -162,28 +162,45 @@ const LeafletMap = () => {
         <div id="leaflet-map-container" style={{ borderRadius: '8px', border: '1px solid #dcd1c4', height: '100%', zIndex: 1 }}></div>
         <div style={{ overflowY: 'auto', maxHeight: '240px', paddingRight: '4px' }}>
           {places.map((place, idx) => (
-            <div
+            <a
               key={idx}
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + " " + place.lat + "," + place.lon)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
+                textDecoration: 'none',
+                color: 'inherit',
+                display: 'block',
                 padding: '10px',
                 borderRadius: '6px',
                 background: '#f9f6f2',
                 border: '1px solid #eae1d8',
                 marginBottom: '8px',
-                fontSize: '0.82rem'
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = place.type === 'hospital' ? '#e83a30' : '#16c79e';
+                e.currentTarget.style.background = '#fefdfb';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#eae1d8';
+                e.currentTarget.style.background = '#f9f6f2';
               }}
             >
-              <div style={{ fontWeight: 600, color: place.type === 'hospital' ? '#104891' : '#16c79e', marginBottom: '2px' }}>
-                {place.name}
+              <div style={{ fontWeight: 600, color: place.type === 'hospital' ? '#104891' : '#16c79e', marginBottom: '2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ paddingRight: '6px' }}>{place.name}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#5e6b7c', background: '#eae1d8', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>🧭 Maps</span>
               </div>
               <div style={{ color: '#5e6b7c', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span>🚗 {place.dist} away</span>
                 <span>⏰ {place.hours}</span>
               </div>
               <div style={{ color: '#242424' }}>
-                📞 <a href={`tel:${place.phone}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500 }}>{place.phone}</a>
+                📞 <span onClick={(e) => e.stopPropagation()}><a href={`tel:${place.phone}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500 }}>{place.phone}</a></span>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       </div>
@@ -856,7 +873,7 @@ Do not use emojis in descriptions.`,
       </aside>
 
       {/* Main Panel */}
-      <main className="dashboard-main">
+      <main className={`dashboard-main ${sidebarCollapsed ? 'collapsed' : ''}`}>
         {/* Hero Section */}
         <div className="app-hero">
           <h1>Community Health Intelligence Assistant</h1>
