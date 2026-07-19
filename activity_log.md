@@ -37,6 +37,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **ESSENCE-inspired Aberration Detection & Historical Seeding:** Implemented a CDC EARS C2-inspired Z-score spatiotemporal aberration algorithm in `data_store/sqlite_store.py` to identify rapid spikes/velocities of anomalies across region x age demographics, and built a database initialization seeder that populates 30 days of mock historical reports and a target HbA1c spike in Urban-Central, rendering full charts and alerts on first load.
 *   **Free Hospital/Pharmacy Map & First Aid Widgets:** Added a keyless Leaflet.js locator map (fetching geolocation coordinates and displaying nearest medical points) and an interactive First Aid Guide (addressing cardiac arrest, seizures, snake bites, bleeding, choking) below the upload panel in Patient Mode.
 *   **Sticky Split Clinical Layout:** Redesigned active/inactive sidebar pills to avoid background blending and lock the menu to `100vh`, and refactored the ingested Patient Dashboard into a 2-column workstation split (report parameters on the left, sticky RAG chat floating on the right).
+*   **Fixed Desktop Sidebar & Map Redirects:** Reconfigured the sidebar layout to `position: fixed` to completely prevent the menu from scrolling away on long dashboards, and made the hospital and pharmacy listing cards clickable, redirecting to active directions via Google Maps query URLs.
 
 ---
 
@@ -44,6 +45,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `c0f837c` | feat: make sidebar layout fixed desktop-side and add map navigation redirect links | Locked sidebar position and added LeafletMap anchor navigation links |
 | `4bd8992` | feat: implement medical locator, first aid guide, sidebar style fix, and sticky split chat layout | Pushed locator map, first aid guide, sidebar pill fixes, and split sticky chat |
 | `8b5b7e4` | fix: resolve React TypeError on trendData.forecast.map by mapping forecast_data | Fixed white screen crash on community dashboard render |
 | `f65e4bb` | feat: implement ESSENCE-inspired spatiotemporal aberration detection and historical db seeding | Added EARS Z-score calculations and 30-day mock seeding |
