@@ -41,6 +41,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **Centered Dashboard Panel Alignment:** Reverted `.dashboard-main` margins to `0 auto` to keep it perfectly centered on the screen, moving the fixed sidebar offset shift to dynamic `padding-left` toggling on the outer `.stApp-container` wrapper.
 *   **OSM Overpass API Integration:** Replaced the local mock clinic locations with a dynamic OpenStreetMap Overpass API POST interpreter. The app now fetches real nearby hospital, clinic, and pharmacy coordinates relative to the user's active browser geolocation, sorts them by distance, and updates Leaflet map markers.
 *   **Multi-Tier Geolocation Resolver:** Configured a three-stage fallback system: browser geolocation (GPS), IP-based geolocating (`ipapi.co`) to locate users when coordinates are inaccurate or blocked, and a manual Search Box integrated with Nominatim geocoding to search any city, zip code, or address and re-center the map.
+*   **Leaflet Map Lifecycle Fix:** Decoupled map initialization, user tracking, and marker loading from the API places response lifecycle. The map now instantiates once on boot and smoothly pans to coordinates via `.setView()`, preventing visual lockups or race conditions when resolving geographic locations. Integrated `ipinfo.io` as a high-reliability fallback for CORS/SSL constraints.
 
 ---
 
@@ -48,6 +49,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `2f38145` | fix: resolve leaflet rendering lifecycle race conditions and add ipinfo.io resolver fallback | Resolved map lockups and improved IP geolocation resolution |
 | `1fc3a80` | feat: implement multi-tier geolocator (browser GPS, IP-based lookup, and Nominatim address search) | Added geolocator fallbacks and search bar |
 | `3dd4137` | feat: query OpenStreetMap Overpass API for real nearby clinics and pharmacies | Integrated dynamic OSM Overpass API node queries on map |
 | `7124ca6` | fix: resolve dashboard-main shifting by offset padding-left on outer stApp-container | Fixed container centering issues during sidebar toggle events |
