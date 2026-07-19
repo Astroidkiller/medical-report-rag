@@ -17,9 +17,8 @@ services:
         sync: false
 
   # 2. Vite React Frontend Service (Static Site)
-  - type: web
+  - type: static
     name: medical-report-rag-frontend
-    env: static
     plan: free
     buildCommand: cd frontend && npm install && npm run build
     publishDir: frontend/dist
