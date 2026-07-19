@@ -800,7 +800,7 @@ Do not use emojis in descriptions.`,
   const activeReport = patientSession?.results?.[activeReportIdx];
 
   return (
-    <div className="stApp-container">
+    <div className={`stApp-container ${sidebarCollapsed ? 'collapsed' : ''}`}>
       {/* Floating Toggle Button */}
       <button 
         className={`sidebar-toggle-btn ${sidebarCollapsed ? 'collapsed' : ''}`}
@@ -873,7 +873,7 @@ Do not use emojis in descriptions.`,
       </aside>
 
       {/* Main Panel */}
-      <main className={`dashboard-main ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      <main className="dashboard-main">
         {/* Hero Section */}
         <div className="app-hero">
           <h1>Community Health Intelligence Assistant</h1>
