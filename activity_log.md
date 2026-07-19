@@ -44,6 +44,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 *   **Leaflet Map Lifecycle Fix:** Decoupled map initialization, user tracking, and marker loading from the API places response lifecycle. The map now instantiates once on boot and smoothly pans to coordinates via `.setView()`, preventing visual lockups or race conditions when resolving geographic locations. Integrated `ipinfo.io` as a high-reliability fallback for CORS/SSL constraints.
 *   **User-Initiated Geocode & Disambiguation UI:** Disabled all automatic mount GPS/IP geolocation. The map now prompts the user to type their location. Nominatim is used to handle spelling errors (fuzzy lookup) and if duplicate matching cities exist (e.g. Hyderabad in India vs Pakistan), the app displays a confirmation list to let the user select the correct coordinates.
 *   **OSM Nominatim Structured Search Integration:** Replaced the heavy and rate-limited OSM Overpass API node queries with a structured Nominatim search query bounded by a dynamic spatial box (`viewbox`) calculated around the target search coordinates. This returns real local clinics and pharmacies in under 150ms with 100% uptime.
+*   **Debounced Fuzzy Autocomplete Dropdown:** Implemented a debounced autocomplete lookup handler (350ms throttle) that queries Nominatim as the user types, returning up to 5 matching geographic locations. This displays a dropdown below the search box, letting users click to auto-complete and select complex or difficult-to-spell locations instantly without manual typing.
 
 ---
 
@@ -51,6 +52,7 @@ This log tracks all major development milestones, features, fixes, and code migr
 
 | Commit Hash | Commit Message Summary | Key Changes / Impacts |
 | :--- | :--- | :--- |
+| `c2853c6` | feat: implement debounced fuzzy autocomplete suggestions list on map search | Added debounced Nominatim auto-completion suggestion box |
 | `f27b309` | feat: replace Overpass API with structured Nominatim bounding box search for nearby clinics | Switched from flaky Overpass API to high-reliability bounded search |
 | `94d70f3` | feat: switch to user-initiated search with fuzzy spelling resolver and disambiguation confirmation list | Added fuzzy search spelling resolver and duplicate city confirmations |
 | `2f38145` | fix: resolve leaflet rendering lifecycle race conditions and add ipinfo.io resolver fallback | Resolved map lockups and improved IP geolocation resolution |
