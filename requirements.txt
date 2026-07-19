@@ -8,3 +8,7 @@ python-dotenv==1.2.2
 plotly==6.8.0
 pandas==3.0.3
 pysqlite3-binary==0.5.4.post2
+fastapi
+uvicorn
+python-multipart
+
