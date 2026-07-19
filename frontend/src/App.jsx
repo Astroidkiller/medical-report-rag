@@ -43,6 +43,9 @@ const PlotlyChart = ({ id, data, layout }) => {
 // FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS, DYNAMIC IP GEOLOCATION, & OSM GEODECODER)
 const LeafletMap = () => {
   const mapRef = React.useRef(null);
+  const userMarkerRef = React.useRef(null);
+  const markersGroupRef = React.useRef(null);
+  
   const [mapType, setMapType] = React.useState('hospitals'); // 'hospitals' or 'pharmacies'
   const [userLocation, setUserLocation] = React.useState([28.6139, 77.2090]); // Default to New Delhi
   const [places, setPlaces] = React.useState([]);
@@ -50,15 +53,46 @@ const LeafletMap = () => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [searchingLocation, setSearchingLocation] = React.useState(false);
   
-  // 1. Get browser geolocation or fallback to IP-based lookup
+  // 1. Initial location lookup on mount (Geolocation + IP Fallbacks)
   React.useEffect(() => {
+    const fetchIpLocation = () => {
+      fetch('https://ipinfo.io/json')
+        .then(res => {
+          if (!res.ok) throw new Error("ipinfo failed");
+          return res.json();
+        })
+        .then(data => {
+          if (data && data.loc) {
+            const coords = data.loc.split(',').map(parseFloat);
+            if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+              setUserLocation(coords);
+              return;
+            }
+          }
+          throw new Error("Invalid ipinfo data");
+        })
+        .catch(err => {
+          console.warn("ipinfo.io failed, trying ipapi.co...", err);
+          fetch('https://ipapi.co/json/')
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.latitude && data.longitude) {
+                setUserLocation([data.latitude, data.longitude]);
+              }
+            })
+            .catch(err2 => {
+              console.warn("All IP geolocators failed. Keeping default New Delhi.");
+            });
+        });
+    };
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation([position.coords.latitude, position.coords.longitude]);
         },
         (error) => {
-          console.warn("Browser Geolocation failed or denied. Trying IP-based geolocator...");
+          console.warn("Browser geolocation failed. Fetching IP location...");
           fetchIpLocation();
         },
         { enableHighAccuracy: true, timeout: 5000 }
@@ -66,22 +100,57 @@ const LeafletMap = () => {
     } else {
       fetchIpLocation();
     }
-
-    function fetchIpLocation() {
-      fetch('https://ipapi.co/json/')
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.latitude && data.longitude) {
-            setUserLocation([data.latitude, data.longitude]);
-          }
-        })
-        .catch(err => {
-          console.warn("IP Geolocation failed:", err);
-        });
-    }
   }, []);
 
-  // 2. Fetch Places from Overpass API (OpenStreetMap) near userLocation
+  // 2. Map Initialization effect (Runs once)
+  React.useEffect(() => {
+    if (window.L && !mapRef.current) {
+      const map = window.L.map('leaflet-map-container', { zoomControl: false }).setView(userLocation, 14);
+      mapRef.current = map;
+      
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+      
+      window.L.control.zoom({ position: 'bottomright' }).addTo(map);
+      
+      // Create LayerGroup for clinic markers
+      markersGroupRef.current = window.L.layerGroup().addTo(map);
+      
+      // Create User Marker
+      const userIcon = window.L.divIcon({
+        className: 'user-location-marker',
+        html: `<div style="width: 12px; height: 12px; background-color: #104891; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(16,72,145,0.6);"></div>`,
+        iconSize: [12, 12]
+      });
+      userMarkerRef.current = window.L.marker(userLocation, { icon: userIcon })
+        .addTo(map)
+        .bindPopup("<b>Your Location</b>")
+        .openPopup();
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        userMarkerRef.current = null;
+        markersGroupRef.current = null;
+      }
+    };
+  }, []);
+
+  // 3. User Location Sync Effect
+  React.useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.setView(userLocation, 14);
+      
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setLatLng(userLocation);
+      }
+    }
+  }, [userLocation]);
+
+  // 4. Fetch Places from Overpass API (OpenStreetMap) near userLocation
   React.useEffect(() => {
     const lat = userLocation[0];
     const lon = userLocation[1];
@@ -159,28 +228,11 @@ const LeafletMap = () => {
     });
   }, [userLocation, mapType]);
 
-  // 3. Render Leaflet Map & Markers
+  // 5. Sync Markers Layer when places updates
   React.useEffect(() => {
-    if (window.L && places.length > 0) {
-      if (mapRef.current) {
-        mapRef.current.remove();
-      }
-      
-      const map = window.L.map('leaflet-map-container', { zoomControl: false }).setView(userLocation, 14);
-      mapRef.current = map;
-      
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-      
-      window.L.control.zoom({ position: 'bottomright' }).addTo(map);
-      
-      const userIcon = window.L.divIcon({
-        className: 'user-location-marker',
-        html: `<div style="width: 12px; height: 12px; background-color: #104891; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(16,72,145,0.6);"></div>`,
-        iconSize: [12, 12]
-      });
-      window.L.marker(userLocation, { icon: userIcon }).addTo(map).bindPopup("<b>Your Location</b>").openPopup();
+    if (window.L && markersGroupRef.current && mapRef.current) {
+      // Clear old place markers
+      markersGroupRef.current.clearLayers();
       
       places.forEach((place) => {
         const markerColor = place.type === 'hospital' ? '#e83a30' : '#16c79e';
@@ -191,13 +243,13 @@ const LeafletMap = () => {
         });
         
         window.L.marker([place.lat, place.lon], { icon: placeIcon })
-          .addTo(map)
+          .addTo(markersGroupRef.current)
           .bindPopup(`<b>${place.name}</b><br/>Distance: ${place.dist}<br/>Hours: ${place.hours}`);
       });
     }
-  }, [userLocation, places]);
+  }, [places]);
 
-  // 4. Handle Geocoding Search (using free Nominatim OSM Geocoder)
+  // 6. Handle Geocoding Search (using free Nominatim OSM Geocoder)
   const handleSearchLocation = () => {
     if (!searchQuery.trim()) return;
     setSearchingLocation(true);
