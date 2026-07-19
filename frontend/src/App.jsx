@@ -397,7 +397,7 @@ Do not use emojis in descriptions.`,
 
   const getTopAbnormalChart = () => {
     if (!communityData || !communityData.top_abnormal) return null;
-    const x = communityData.top_abnormal.map(t => t.abnormal_count);
+    const x = communityData.top_abnormal.map(t => t.flag_count);
     const y = communityData.top_abnormal.map(t => t.test_name);
 
     return {
@@ -425,8 +425,9 @@ Do not use emojis in descriptions.`,
     const histRates = trendData.historical.map(h => h.abnormal_rate);
     
     // Forecast Series
-    const foreDates = trendData.forecast.map(f => f.date);
-    const foreRates = trendData.forecast.map(f => f.abnormal_rate);
+    const forecastList = trendData.forecast && trendData.forecast.forecast_data ? trendData.forecast.forecast_data : [];
+    const foreDates = forecastList.map(f => f.date);
+    const foreRates = forecastList.map(f => f.projected_rate);
 
     return {
       data: [

@@ -457,7 +457,8 @@ def get_test_trend(test_name: str, time_period: str = None) -> list[dict]:
                 DATE(timestamp) as date,
                 AVG(value) as avg_value,
                 COUNT(*) as count,
-                SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal_count
+                SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) as abnormal_count,
+                ROUND(SUM(CASE WHEN flag NOT IN ('NORMAL', 'UNKNOWN') THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as abnormal_rate
             FROM lab_values
             {where_clause}
             GROUP BY DATE(timestamp)

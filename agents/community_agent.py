@@ -26,6 +26,7 @@ from data_store.sqlite_store import (
     get_all_test_names,
     forecast_abnormal_trend,
     get_risk_forecast_by_region,
+    get_demographic_cross_tab,
 )
 
 
@@ -40,6 +41,20 @@ def get_dashboard_data(time_period: str = None, use_dp: bool = True) -> dict:
     Returns:
         Dict with all dashboard metrics, charts data, and alerts.
     """
+    # Fetch demographic cross tab
+    demographic_cross_tab = []
+    highlights = []
+    try:
+        demographic_cross_tab = get_demographic_cross_tab(time_period)
+        for item in demographic_cross_tab[:4]:
+            if item["rate"] >= 15.0:
+                highlights.append(
+                    f"Elevated anomaly rate of {item['rate']}% detected for {item['test_name']} "
+                    f"in {item['region']} among age group {item['age_group']} (based on {item['total']} records)."
+                )
+    except Exception as e:
+        print(f"[HIGHLIGHTS] Failed to generate highlights: {e}")
+
     return {
         "metrics": {
             "total_reports": get_total_reports(use_dp=use_dp),
@@ -50,6 +65,8 @@ def get_dashboard_data(time_period: str = None, use_dp: bool = True) -> dict:
         "flag_distribution": get_flag_distribution(time_period=time_period),
         "region_summary": get_region_summary(time_period=time_period, use_dp=use_dp),
         "age_group_summary": get_age_group_summary(time_period=time_period, use_dp=use_dp),
+        "demographic_highlights": highlights,
+        "demographic_cross_tab": demographic_cross_tab,
         "alerts": [
             {
                 "severity": a.severity,
