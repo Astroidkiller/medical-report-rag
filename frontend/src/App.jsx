@@ -40,13 +40,15 @@ const PlotlyChart = ({ id, data, layout }) => {
 };
 
 
-// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS)
+// FREE HOSPITAL & PHARMACY LOCATOR (USING LEAFLET.JS & OVERPASS API)
 const LeafletMap = () => {
   const mapRef = React.useRef(null);
   const [mapType, setMapType] = React.useState('hospitals'); // 'hospitals' or 'pharmacies'
   const [userLocation, setUserLocation] = React.useState([28.6139, 77.2090]); // Default to New Delhi
   const [places, setPlaces] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
   
+  // 1. Get browser geolocation on component mount
   React.useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -54,44 +56,105 @@ const LeafletMap = () => {
           setUserLocation([position.coords.latitude, position.coords.longitude]);
         },
         (error) => {
-          console.warn("Geolocation permission denied, using default location.");
-        }
+          console.warn("Geolocation access denied or failed, using default location.");
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
       );
     }
   }, []);
 
+  // 2. Fetch Places from Overpass API (OpenStreetMap) near userLocation
   React.useEffect(() => {
     const lat = userLocation[0];
     const lon = userLocation[1];
+    setLoading(true);
     
-    const mockHospitals = [
-      { name: "City Care Super Specialty Hospital", type: "hospital", lat: lat + 0.004, lon: lon - 0.003, dist: "0.5 km", phone: "+91 98765 43210", hours: "24 Hours" },
-      { name: "Apex Trauma & Cardiac Centre", type: "hospital", lat: lat - 0.005, lon: lon + 0.006, dist: "0.9 km", phone: "+91 87654 32109", hours: "24 Hours" },
-      { name: "St. Jude Community Health Clinic", type: "hospital", lat: lat + 0.008, lon: lon + 0.002, dist: "1.2 km", phone: "+91 76543 21098", hours: "8 AM - 8 PM" },
-    ];
+    const useFallbackMockPlaces = () => {
+      const mockHospitals = [
+        { name: "City Care Super Specialty Hospital", type: "hospital", lat: lat + 0.004, lon: lon - 0.003, dist: "0.5 km", phone: "+91 98765 43210", hours: "24 Hours" },
+        { name: "Apex Trauma & Cardiac Centre", type: "hospital", lat: lat - 0.005, lon: lon + 0.006, dist: "0.9 km", phone: "+91 87654 32109", hours: "24 Hours" },
+        { name: "St. Jude Community Health Clinic", type: "hospital", lat: lat + 0.008, lon: lon + 0.002, dist: "1.2 km", phone: "+91 76543 21098", hours: "8 AM - 8 PM" },
+      ];
+      
+      const mockPharmacies = [
+        { name: "Apollo 24/7 Wellness Pharmacy", type: "pharmacy", lat: lat + 0.002, lon: lon + 0.002, dist: "0.3 km", phone: "+91 1800-123-4567", hours: "24 Hours" },
+        { name: "MedPlus Discount Pharmacy", type: "pharmacy", lat: lat - 0.003, lon: lon - 0.004, dist: "0.6 km", phone: "+91 99999 88888", hours: "7 AM - 11 PM" },
+        { name: "Wellness Forever Chemist & Druggist", type: "pharmacy", lat: lat + 0.006, lon: lon - 0.007, dist: "1.1 km", phone: "+91 88888 77777", hours: "24 Hours" },
+      ];
+      setPlaces(mapType === 'hospitals' ? mockHospitals : mockPharmacies);
+      setLoading(false);
+    };
+
+    const amenity = mapType === 'hospitals' ? 'hospital' : 'pharmacy';
+    const query = `
+      [out:json][timeout:15];
+      (
+        node["amenity"="${amenity}"](around:4000, ${lat}, ${lon});
+        way["amenity"="${amenity}"](around:4000, ${lat}, ${lon});
+      );
+      out center;
+    `;
     
-    const mockPharmacies = [
-      { name: "Apollo 24/7 Wellness Pharmacy", type: "pharmacy", lat: lat + 0.002, lon: lon + 0.002, dist: "0.3 km", phone: "+91 1800-123-4567", hours: "24 Hours" },
-      { name: "MedPlus Discount Pharmacy", type: "pharmacy", lat: lat - 0.003, lon: lon - 0.004, dist: "0.6 km", phone: "+91 99999 88888", hours: "7 AM - 11 PM" },
-      { name: "Wellness Forever Chemist & Druggist", type: "pharmacy", lat: lat + 0.006, lon: lon - 0.007, dist: "1.1 km", phone: "+91 88888 77777", hours: "24 Hours" },
-    ];
-    
-    const selectedPlaces = mapType === 'hospitals' ? mockHospitals : mockPharmacies;
-    setPlaces(selectedPlaces);
-    
-    if (window.L) {
+    fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: query
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.elements && data.elements.length > 0) {
+        const parsed = data.elements.map(el => {
+          const name = el.tags.name || (mapType === 'hospitals' ? 'Local Clinic / Hospital' : 'Local Pharmacy');
+          const pLat = el.lat || el.center?.lat;
+          const pLon = el.lon || el.center?.lon;
+          
+          const R = 6371; // km
+          const dLat = (pLat - lat) * Math.PI / 180;
+          const dLon = (pLon - lon) * Math.PI / 180;
+          const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat * Math.PI / 180) * Math.cos(pLat * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const distKm = R * c;
+          
+          return {
+            name: name,
+            type: mapType === 'hospitals' ? 'hospital' : 'pharmacy',
+            lat: pLat,
+            lon: pLon,
+            dist: distKm.toFixed(1) + " km",
+            phone: el.tags.phone || el.tags['contact:phone'] || el.tags['phone:mobile'] || "No contact info",
+            hours: el.tags.opening_hours || "Hours not specified"
+          };
+        });
+        
+        parsed.sort((a, b) => parseFloat(a.dist) - parseFloat(b.dist));
+        setPlaces(parsed.slice(0, 5));
+        setLoading(false);
+      } else {
+        useFallbackMockPlaces();
+      }
+    })
+    .catch(err => {
+      console.warn("Overpass API failed, using fallback:", err);
+      useFallbackMockPlaces();
+    });
+  }, [userLocation, mapType]);
+
+  // 3. Render Leaflet Map & Markers
+  React.useEffect(() => {
+    if (window.L && places.length > 0) {
       if (mapRef.current) {
         mapRef.current.remove();
       }
       
-      const map = window.L.map('leaflet-map-container', { zoomControl: false }).setView(userLocation, 15);
+      const map = window.L.map('leaflet-map-container', { zoomControl: false }).setView(userLocation, 14);
       mapRef.current = map;
       
       window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap'
+        attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
       
-      // Add custom zoom control to bottom right
       window.L.control.zoom({ position: 'bottomright' }).addTo(map);
       
       const userIcon = window.L.divIcon({
@@ -101,7 +164,7 @@ const LeafletMap = () => {
       });
       window.L.marker(userLocation, { icon: userIcon }).addTo(map).bindPopup("<b>Your Location</b>").openPopup();
       
-      selectedPlaces.forEach((place) => {
+      places.forEach((place) => {
         const markerColor = place.type === 'hospital' ? '#e83a30' : '#16c79e';
         const placeIcon = window.L.divIcon({
           className: 'place-marker',
@@ -111,10 +174,10 @@ const LeafletMap = () => {
         
         window.L.marker([place.lat, place.lon], { icon: placeIcon })
           .addTo(map)
-          .bindPopup(`<b>${place.name}</b><br/>Distance: ${place.dist}<br/>Hours: ${place.hours}<br/>Phone: ${place.phone}`);
+          .bindPopup(`<b>${place.name}</b><br/>Distance: ${place.dist}<br/>Hours: ${place.hours}`);
       });
     }
-  }, [userLocation, mapType]);
+  }, [userLocation, places]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -161,47 +224,58 @@ const LeafletMap = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', height: '240px' }}>
         <div id="leaflet-map-container" style={{ borderRadius: '8px', border: '1px solid #dcd1c4', height: '100%', zIndex: 1 }}></div>
         <div style={{ overflowY: 'auto', maxHeight: '240px', paddingRight: '4px' }}>
-          {places.map((place, idx) => (
-            <a
-              key={idx}
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + " " + place.lat + "," + place.lon)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                textDecoration: 'none',
-                color: 'inherit',
-                display: 'block',
-                padding: '10px',
-                borderRadius: '6px',
-                background: '#f9f6f2',
-                border: '1px solid #eae1d8',
-                marginBottom: '8px',
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = place.type === 'hospital' ? '#e83a30' : '#16c79e';
-                e.currentTarget.style.background = '#fefdfb';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#eae1d8';
-                e.currentTarget.style.background = '#f9f6f2';
-              }}
-            >
-              <div style={{ fontWeight: 600, color: place.type === 'hospital' ? '#104891' : '#16c79e', marginBottom: '2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ paddingRight: '6px' }}>{place.name}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#5e6b7c', background: '#eae1d8', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>🧭 Maps</span>
-              </div>
-              <div style={{ color: '#5e6b7c', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>🚗 {place.dist} away</span>
-                <span>⏰ {place.hours}</span>
-              </div>
-              <div style={{ color: '#242424' }}>
-                📞 <span onClick={(e) => e.stopPropagation()}><a href={`tel:${place.phone}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500 }}>{place.phone}</a></span>
-              </div>
-            </a>
-          ))}
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '10px', color: '#5e6b7c', fontSize: '0.85rem', minHeight: '180px' }}>
+              <RefreshCw className="animate-spin" size={24} style={{ color: mapType === 'hospitals' ? '#104891' : '#16c79e' }} />
+              <span>Scanning area for local medical units...</span>
+            </div>
+          ) : places.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#5e6b7c', fontSize: '0.85rem' }}>
+              No clinics or pharmacies found in your immediate vicinity.
+            </div>
+          ) : (
+            places.map((place, idx) => (
+              <a
+                key={idx}
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name + " " + place.lat + "," + place.lon)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  display: 'block',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  background: '#f9f6f2',
+                  border: '1px solid #eae1d8',
+                  marginBottom: '8px',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = place.type === 'hospital' ? '#e83a30' : '#16c79e';
+                  e.currentTarget.style.background = '#fefdfb';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#eae1d8';
+                  e.currentTarget.style.background = '#f9f6f2';
+                }}
+              >
+                <div style={{ fontWeight: 600, color: place.type === 'hospital' ? '#104891' : '#16c79e', marginBottom: '2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ paddingRight: '6px' }}>{place.name}</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#5e6b7c', background: '#eae1d8', padding: '2px 6px', borderRadius: '4px', flexShrink: 0 }}>🧭 Maps</span>
+                </div>
+                <div style={{ color: '#5e6b7c', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>🚗 {place.dist} away</span>
+                  <span>⏰ {place.hours}</span>
+                </div>
+                <div style={{ color: '#242424' }}>
+                  📞 <span onClick={(e) => e.stopPropagation()}><a href={`tel:${place.phone}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500 }}>{place.phone}</a></span>
+                </div>
+              </a>
+            ))
+          )}
         </div>
       </div>
     </div>
