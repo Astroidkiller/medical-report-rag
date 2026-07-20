@@ -75,18 +75,31 @@ def store_chunks(
         metadata_list: Optional list of metadata dicts per chunk.
         id_prefix: Prefix for chunk IDs to avoid collisions across reports.
     """
+    if not chunks:
+        return
+
     client = get_chroma_client()
     collection = client.get_or_create_collection(name=collection_name)
 
-    for i, chunk in enumerate(chunks):
-        doc_id = f"{id_prefix}_{i}" if id_prefix else str(i)
-        meta = metadata_list[i] if metadata_list else {}
-        collection.add(
-            documents=[chunk],
-            embeddings=[embeddings[i]],
-            ids=[doc_id],
-            metadatas=[meta],
-        )
+    ids = [f"{id_prefix}_{i}" if id_prefix else str(i) for i in range(len(chunks))]
+
+    metadatas = None
+    if metadata_list:
+        # ChromaDB requires non-empty dicts if metadatas is provided
+        cleaned_metadatas = [m for m in metadata_list if isinstance(m, dict) and len(m) > 0]
+        if len(cleaned_metadatas) == len(chunks):
+            metadatas = cleaned_metadatas
+
+    add_kwargs = {
+        "documents": chunks,
+        "embeddings": embeddings,
+        "ids": ids,
+    }
+    if metadatas:
+        add_kwargs["metadatas"] = metadatas
+
+    collection.add(**add_kwargs)
+
 
 
 def query_similar(
