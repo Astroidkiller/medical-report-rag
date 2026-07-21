@@ -61,29 +61,60 @@ _PATTERNS = [
     ),
 ]
 
-# Words that should NOT be treated as test names
+# Words and substrings that should NOT be treated as test names
 _NOISE_WORDS = {
     "page", "date", "time", "name", "age", "sex", "gender", "patient",
     "doctor", "dr", "report", "lab", "laboratory", "hospital", "clinic",
     "sample", "collected", "received", "reported", "method", "department",
     "ref", "reference", "range", "normal", "unit", "result", "test",
-    "sr", "no", "s.no", "sl", "serial",
+    "sr", "no", "s.no", "sl", "serial", "shop", "street", "road", "college",
+    "medicalcollege", "address", "phone", "mobile", "reg", "receipt", "bill",
+    "invoice", "customer", "location", "branch", "pincode", "tel", "fax",
+    "kindly", "submit", "request", "within", "derivation", "variable",
+    "ranging", "note", "disclaimer", "interpretation", "comment", "instruction",
+    "exact", "hours", "days", "weeks", "month", "months", "small", "large",
+    "intestine", "variable", "ranging", "from"
 }
+
+_NOISE_SUBSTRINGS = [
+    "shop", "college", "address", "phone", "road", "street", "kindly",
+    "submit", "request", "within", "derivation", "variable", "ranging",
+    "disclaimer", "interpretation", "comment", "instruction", "s.o",
+    "medicalcollege", "pincode", "invoice", "receipt", "building"
+]
 
 
 def _is_noise(name: str) -> bool:
-    """Check if extracted name is likely noise/header text."""
+    """Check if extracted name is likely noise/header/address/disclaimer text."""
     cleaned = name.strip().lower()
-    # Too short or too long
-    if len(cleaned) < 2 or len(cleaned) > 60:
+    
+    # 1. Length check: Medical test names are concise (e.g., "Hemoglobin", "Tacrolimus", "HbA1c")
+    if len(cleaned) < 2 or len(cleaned) > 45:
         return True
-    # Starts with a noise word
-    first_word = cleaned.split()[0] if cleaned.split() else ""
-    if first_word in _NOISE_WORDS:
+        
+    # 2. Word count check: Real test names rarely exceed 5 words
+    words = cleaned.split()
+    if len(words) > 5:
         return True
-    # All digits or purely numeric
-    if cleaned.replace(".", "").replace(" ", "").isdigit():
+
+    # 3. First word check
+    if words[0] in _NOISE_WORDS:
         return True
+
+    # 4. Substring check for addresses, shop numbers, disclaimers, or sentence fragments
+    for sub in _NOISE_SUBSTRINGS:
+        if sub in cleaned:
+            return True
+
+    # 5. Sentence detection: Contains common English sentence verbs/conjunctions
+    sentence_markers = {"is", "are", "was", "were", "within", "from", "to", "Kindly", "submit", "please"}
+    if any(m in words for m in sentence_markers):
+        return True
+
+    # 6. All digits or purely numeric
+    if cleaned.replace(".", "").replace(" ", "").replace("-", "").isdigit():
+        return True
+
     return False
 
 
@@ -264,25 +295,30 @@ def parse_all_lab_values_llm_fallback(text: str, tables: list[list[list[str]]]) 
 
     prompt = f"""
 You are an expert Clinical Data Extraction AI.
-Your task is to analyze the provided raw text and tables from a medical diagnostic report, and systematically extract every single laboratory test result found.
+Your task is to analyze the provided raw text and tables from a medical diagnostic report, and systematically extract ONLY genuine laboratory medical test results found.
 
-### EXTRACTION RULES:
-1. **Completeness**: Extract every test result present in the text and tables.
-2. **Numeric Focus**: Extract the numeric value of the test result. 
-   - If the value is '< 0.05', output 0.05. 
+### INCLUSION RULES:
+1. **Clinical Parameters Only**: Extract ONLY genuine medical lab test analytes (e.g., "Tacrolimus", "Hemoglobin", "HbA1c", "Serum Creatinine", "Platelet Count", "TSH", "WBC").
+2. **Numeric Focus**: Extract the numeric value of the test result.
+   - If the value is '< 0.05', output 0.05.
    - If the value is qualitative (e.g., 'Negative', 'Not Detected'), output 0.0.
    - If the value is a range or cannot be parsed as a float at all, skip it.
-3. **Reference Ranges**: Extract the normal/biological reference range (low and high bounds). If the report does not provide a reference range for a specific test, return null for both bounds.
+3. **Reference Ranges**: Extract the normal/biological reference range (low and high bounds). If not provided, set reference_low and reference_high to null.
+
+### CRITICAL EXCLUSION RULES (DO NOT EXTRACT):
+- **NEVER** extract clinic/lab header text, hospital names, shop numbers, addresses, PIN codes, patient registration numbers, doctor names, or phone numbers (e.g. "Kurnool Medical College", "Shop No 3").
+- **NEVER** extract report notes, disclaimers, methodology comments, or request deadlines (e.g. "Kindly submit request within 72 hours", "small intestine is highly variable").
+- **NEVER** extract general text sentences as test names.
 
 ### OUTPUT FORMAT:
-You MUST return ONLY a valid JSON array of objects. Do not include markdown formatting like ```json or any conversational text.
-Each JSON object must have EXACTLY the following keys:
-- "test_name": string (The name of the test, e.g., "Hemoglobin")
+You MUST return ONLY a valid JSON array of objects. Do not include markdown formatting or conversational text.
+Each JSON object must have EXACTLY these keys:
+- "test_name": string (Clean name of medical test, e.g., "Tacrolimus (FK-506)")
 - "value": float (The extracted numeric value)
-- "unit": string (The unit of measurement, e.g., "g/dL", or "" if none)
-- "reference_low": float or null (The lower bound of the normal range)
-- "reference_high": float or null (The upper bound of the normal range)
-- "raw_line": string (The original line of text or table row this data was extracted from, for source attribution)
+- "unit": string (The unit of measurement, e.g., "ug/L", "g/dL", or "")
+- "reference_low": float or null
+- "reference_high": float or null
+- "raw_line": string
 
 ### REPORT DATA:
 
@@ -306,8 +342,13 @@ Each JSON object must have EXACTLY the following keys:
         results = []
         for item in data:
             try:
+                name = str(item["test_name"]).strip()
+                if _is_noise(name):
+                    print(f"[EXTRACTION FILTERED NOISE]: '{name}'")
+                    continue
+
                 results.append(ExtractedLabValue(
-                    test_name=item["test_name"],
+                    test_name=name,
                     value=float(item["value"]),
                     unit=item.get("unit", ""),
                     reference_low=float(item["reference_low"]) if item.get("reference_low") is not None else None,
