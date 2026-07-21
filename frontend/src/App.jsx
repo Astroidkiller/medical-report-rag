@@ -28,12 +28,12 @@ const PlotlyChart = ({ id, data, layout }) => {
       window.Plotly.newPlot(id, data, {
         ...layout,
         paper_bgcolor: 'rgba(0,0,0,0)',
-        plot_bgcolor: 'rgba(41, 28, 14, 0.4)',
-        font: { family: 'Plus Jakarta Sans, sans-serif', color: '#E1D4C2' },
+        plot_bgcolor:  'rgba(245, 239, 231, 0.5)',
+        font: { family: 'Plus Jakarta Sans, sans-serif', color: '#291C0E' },
         margin: { t: 40, r: 20, l: 60, b: 50 },
-        xaxis: { ...(layout.xaxis || {}), gridcolor: 'rgba(110,71,59,0.2)', color: '#A78D78' },
-        yaxis: { ...(layout.yaxis || {}), gridcolor: 'rgba(110,71,59,0.2)', color: '#A78D78' },
-        title: { text: layout.title || '', font: { color: '#E1D4C2', size: 14 } },
+        xaxis: { ...(layout.xaxis || {}), gridcolor: 'rgba(190,181,169,0.4)', color: '#A78D78', linecolor: '#BEB5A9' },
+        yaxis: { ...(layout.yaxis || {}), gridcolor: 'rgba(190,181,169,0.4)', color: '#A78D78', linecolor: '#BEB5A9' },
+        title: { text: layout.title || '', font: { color: '#291C0E', size: 14, family: 'Outfit, sans-serif' } },
         responsive: true
       });
     }
@@ -87,7 +87,7 @@ const LeafletMap = () => {
       // Create User Marker
       const userIcon = window.L.divIcon({
         className: 'user-location-marker',
-        html: `<div style="width: 13px; height: 13px; background-color: #6E473B; border: 2px solid #E1D4C2; border-radius: 50%; box-shadow: 0 0 10px rgba(110,71,59,0.8);"></div>`,
+        html: `<div style="width: 13px; height: 13px; background-color: #6E473B; border: 2px solid #FFFFFF; border-radius: 50%; box-shadow: 0 0 10px rgba(110,71,59,0.6);"></div>`,
         iconSize: [12, 12]
       });
       userMarkerRef.current = window.L.marker(userLocation, { icon: userIcon })
@@ -380,10 +380,10 @@ const LeafletMap = () => {
               height: '38px',
               padding: '0 12px',
               fontSize: '0.82rem',
-              border: '1px solid rgba(110,71,59,0.3)',
+              border: '1.5px solid var(--border-light)',
               borderRadius: '8px',
-              background: 'var(--bg-surface)',
-              color: 'var(--cream)',
+              background: '#FFFFFF',
+              color: 'var(--text-charcoal)',
               outline: 'none'
             }}
           />
@@ -395,10 +395,10 @@ const LeafletMap = () => {
               top: 'calc(100% + 4px)',
               left: 0,
               right: 0,
-              background: 'var(--bg-surface-2)',
-              border: '1px solid rgba(110,71,59,0.3)',
+              background: '#FFFFFF',
+              border: '1.5px solid var(--border-light)',
               borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+              boxShadow: '0 8px 24px rgba(41,28,14,0.1)',
               zIndex: 1000,
               maxHeight: '180px',
               overflowY: 'auto'
@@ -416,20 +416,19 @@ const LeafletMap = () => {
                     padding: '8px 12px',
                     fontSize: '0.78rem',
                     cursor: 'pointer',
-                    color: 'var(--sand)',
-                    borderBottom: idx < suggestions.length - 1 ? '1px solid rgba(110,71,59,0.18)' : 'none',
+                    color: 'var(--text-charcoal)',
+                    borderBottom: idx < suggestions.length - 1 ? '1px solid var(--border-light)' : 'none',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    transition: 'all 0.15s'
+                    textOverflow: 'ellipsis'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(110,71,59,0.18)';
-                    e.currentTarget.style.color = 'var(--cream)';
+                    e.currentTarget.style.background = 'rgba(110,71,59,0.08)';
+                    e.currentTarget.style.color = 'var(--terracotta)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'var(--sand)';
+                    e.currentTarget.style.color = 'var(--text-charcoal)';
                   }}
                 >
                   {item.display_name}
@@ -492,21 +491,21 @@ const LeafletMap = () => {
                 style={{
                   textAlign: 'left',
                   padding: '6px 10px',
-                  background: 'var(--bg-surface)',
-                  border: '1px solid rgba(110,71,59,0.3)',
+                  background: '#FFFFFF',
+                  border: '1.5px solid var(--border-light)',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   fontSize: '0.76rem',
-                  color: 'var(--sand)',
+                  color: 'var(--text-secondary)',
                   transition: 'all 0.15s'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--terracotta)';
-                  e.currentTarget.style.background = 'rgba(110,71,59,0.15)';
+                  e.currentTarget.style.background = 'rgba(110,71,59,0.05)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(110,71,59,0.3)';
-                  e.currentTarget.style.background = 'var(--bg-surface)';
+                  e.currentTarget.style.borderColor = 'var(--border-light)';
+                  e.currentTarget.style.background = '#FFFFFF';
                 }}
               >
                 {opt.display_name}
@@ -545,9 +544,9 @@ const LeafletMap = () => {
                   color: 'inherit',
                   display: 'block',
                   padding: '10px 12px',
-                  borderRadius: '10px',
-                  background: 'var(--bg-surface)',
-                  border: '1px solid rgba(110,71,59,0.22)',
+                  borderRadius: '12px',
+                  background: '#FFFFFF',
+                  border: '1px solid var(--border-light)',
                   marginBottom: '8px',
                   fontSize: '0.82rem',
                   cursor: 'pointer',
@@ -555,23 +554,23 @@ const LeafletMap = () => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = place.type === 'hospital' ? '#e83a30' : 'var(--terracotta)';
-                  e.currentTarget.style.background = 'var(--bg-surface-2)';
+                  e.currentTarget.style.background = 'var(--bg-mid)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(110,71,59,0.22)';
-                  e.currentTarget.style.background = 'var(--bg-surface)';
+                  e.currentTarget.style.borderColor = 'var(--border-light)';
+                  e.currentTarget.style.background = '#FFFFFF';
                 }}
               >
-                <div style={{ fontWeight: 700, color: 'var(--cream)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontWeight: 700, color: 'var(--espresso)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ paddingRight: '6px' }}>{place.name}</span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--taupe)', background: 'rgba(110,71,59,0.15)', padding: '2px 7px', borderRadius: '6px', flexShrink: 0 }}>Maps</span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--taupe)', background: 'rgba(190,181,169,0.2)', padding: '2px 7px', borderRadius: '6px', flexShrink: 0 }}>Maps</span>
                 </div>
                 <div style={{ color: 'var(--taupe)', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span>{place.dist} away</span>
                   <span>{place.hours}</span>
                 </div>
-                <div style={{ color: 'var(--sand)' }}>
-                  <span onClick={(e) => e.stopPropagation()}><a href={`tel:${place.phone}`} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500 }}>{place.phone}</a></span>
+                <div style={{ color: 'var(--taupe)' }}>
+                  <span onClick={(e) => e.stopPropagation()}><a href={`tel:${place.phone}`} style={{ color: 'var(--terracotta)', textDecoration: 'none', fontWeight: 600 }}>{place.phone}</a></span>
                 </div>
               </a>
             ))
@@ -662,14 +661,14 @@ const FirstAidGuide = () => {
                 padding: '9px 10px',
                 textAlign: 'left',
                 borderRadius: '10px',
-                border: '1px solid rgba(110,71,59,0.25)',
-                background: selectedIncident === key ? 'var(--terracotta)' : 'var(--bg-surface)',
-                color: selectedIncident === key ? 'var(--cream)' : 'var(--taupe)',
+                border: '1.5px solid var(--border-light)',
+                background: selectedIncident === key ? 'var(--terracotta)' : '#FFFFFF',
+                color: selectedIncident === key ? '#FFFFFF' : 'var(--text-secondary)',
                 fontSize: '0.76rem',
                 fontWeight: 700,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: selectedIncident === key ? '0 4px 12px rgba(110,71,59,0.35)' : 'none'
+                boxShadow: selectedIncident === key ? '0 4px 12px rgba(110,71,59,0.3)' : 'var(--shadow-card)'
               }}
             >
               {key.replace('_', ' ').toUpperCase()}
@@ -698,16 +697,16 @@ const FirstAidGuide = () => {
         </div>
 
         {/* Instructions pane */}
-        <div style={{ background: 'var(--bg-surface)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(110,71,59,0.22)', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
-          <div style={{ fontWeight: 700, color: 'var(--cream)', fontSize: '0.92rem', marginBottom: '10px' }}>
+        <div style={{ background: '#FFFFFF', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-light)', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
+          <div style={{ fontWeight: 700, color: 'var(--espresso)', fontSize: '0.92rem', marginBottom: '10px' }}>
             {incidents[selectedIncident].title}
           </div>
-          <ol style={{ paddingLeft: '16px', margin: '0 0 10px 0', fontSize: '0.82rem', lineHeight: '1.6', color: 'var(--sand)' }}>
+          <ol style={{ paddingLeft: '16px', margin: '0 0 10px 0', fontSize: '0.82rem', lineHeight: '1.65', color: 'var(--taupe)' }}>
             {incidents[selectedIncident].steps.map((step, idx) => {
               const parts = step.split('**');
               return (
                 <li key={idx} style={{ marginBottom: '7px' }}>
-                  {parts.map((part, pIdx) => pIdx % 2 === 1 ? <strong key={pIdx} style={{ color: 'var(--cream)' }}>{part}</strong> : part)}
+                  {parts.map((part, pIdx) => pIdx % 2 === 1 ? <strong key={pIdx} style={{ color: 'var(--terracotta)' }}>{part}</strong> : part)}
                 </li>
               );
             })}
@@ -1368,19 +1367,19 @@ Do not use emojis in descriptions.`,
                           <div className="label">Total Test Observations</div>
                         </div>
                         <div className="metric-card">
-                          <div className="value" style={{ color: activeReport.risk_summary.normal > 0 ? 'var(--taupe)' : 'var(--cream)' }}>
+                          <div className="value" style={{ color: activeReport.risk_summary.normal > 0 ? 'var(--terracotta)' : 'var(--espresso)' }}>
                             {activeReport.risk_summary.normal}
                           </div>
                           <div className="label">Normal Results</div>
                         </div>
                         <div className="metric-card">
-                          <div className="value" style={{ color: activeReport.risk_summary.abnormal > 0 ? 'var(--warning-amber)' : 'var(--cream)' }}>
+                          <div className="value" style={{ color: activeReport.risk_summary.abnormal > 0 ? 'var(--warning-amber)' : 'var(--espresso)' }}>
                             {activeReport.risk_summary.abnormal}
                           </div>
                           <div className="label">Abnormal Flags</div>
                         </div>
                         <div className="metric-card">
-                          <div className="value" style={{ color: activeReport.risk_summary.critical > 0 ? 'var(--alert-critical)' : 'var(--cream)' }}>
+                          <div className="value" style={{ color: activeReport.risk_summary.critical > 0 ? 'var(--alert-critical)' : 'var(--espresso)' }}>
                             {activeReport.risk_summary.critical}
                           </div>
                           <div className="label">Critical Bounds</div>
@@ -1624,13 +1623,13 @@ Do not use emojis in descriptions.`,
                     <div className="label">Anonymized Test Parameters</div>
                   </div>
                   <div className="metric-card">
-                    <div className="value" style={{ color: communityData.metrics.abnormal_rate > 25.0 ? 'var(--alert-critical)' : 'var(--taupe)' }}>
+                    <div className="value" style={{ color: communityData.metrics.abnormal_rate > 25.0 ? 'var(--alert-critical)' : 'var(--terracotta)' }}>
                       {communityData.metrics.abnormal_rate}%
                     </div>
                     <div className="label">Anomaly Rate</div>
                   </div>
                   <div className="metric-card">
-                    <div className="value" style={{ color: 'var(--cream)' }}>
+                    <div className="value" style={{ color: 'var(--espresso)' }}>
                       {useDP ? 'Epsilon 0.5' : 'Disabled'}
                     </div>
                     <div className="label">Privacy Guard</div>
