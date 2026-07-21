@@ -12,6 +12,7 @@ import os
 import sys
 import glob
 import re
+import json
 
 # Ensure project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -105,6 +106,31 @@ def _print_section(title: str):
     print(f"{'─' * 50}")
 
 
+def _sanitize_for_display(text: str) -> str:
+    """Redact sensitive tokens/secrets before writing text to console output."""
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        try:
+            text = json.dumps(text, ensure_ascii=False)
+        except Exception:
+            text = str(text)
+
+    patterns = [
+        # API key in URL/query params
+        (r"(?i)([?&]key=)[^&\s]+", r"\1REDACTED"),
+        # Common bearer token header/value
+        (r"(?i)(authorization\s*:\s*bearer\s+)[^\s]+", r"\1REDACTED"),
+        # Generic token/api_key/password assignments
+        (r"(?i)\b(api[_-]?key|token|password)\b\s*[:=]\s*['\"]?[^,'\"\s]+['\"]?", r"\1=REDACTED"),
+    ]
+
+    sanitized = text
+    for pattern, repl in patterns:
+        sanitized = re.sub(pattern, repl, sanitized)
+    return sanitized
+
+
 def _print_risk_card(risk: dict):
     """Pretty-print a risk card to the terminal."""
     card = risk["card"]
@@ -177,7 +203,7 @@ def _print_qa_response(qa: dict):
     """Pretty-print a QA response."""
     print(f"\n  💬 Answer:\n")
     # Word-wrap the answer for terminal display
-    answer = qa["answer"]
+    answer = _sanitize_for_display(qa["answer"])
     for line in answer.split("\n"):
         print(f"  {line}")
 
