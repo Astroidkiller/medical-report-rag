@@ -66,10 +66,20 @@ def _redact_sensitive_text(text: str) -> str:
 
     # Redact URL query parameter forms like ?key=... or &api_key=...
     redacted = re.sub(
-        r"""(?i)([?&](?:key|api[_-]?key|token|access_token|authorization)=)[^&\s'"]+""",
+        r"""(?i)([?&](?:key|api[_-]?key|token|access[_-]?token|refresh[_-]?token|authorization)=)[^&\s'"]+""",
         r"\1REDACTED",
         redacted,
     )
+
+    # Redact key-like values that may appear in URLs or text without strict formatting.
+    redacted = re.sub(
+        r"""(?i)(\b(?:x[-_]?api[-_]?key|api[_-]?key|access[_-]?token|refresh[_-]?token|bearer|authorization|secret)\b\s*[:=]\s*)(["'`])?([A-Za-z0-9._\-]{8,})\2?""",
+        r"\1REDACTED",
+        redacted,
+    )
+
+    # Conservative fallback: mask long high-entropy token-like strings.
+    redacted = re.sub(r"""(?<![A-Za-z0-9])[A-Za-z0-9_\-]{24,}(?![A-Za-z0-9])""", "REDACTED", redacted)
 
     for env_name in ("GEMINI_API_KEY", "GROQ_API_KEY"):
         secret = os.getenv(env_name)
