@@ -317,8 +317,8 @@ const LeafletMap = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#104891' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', minHeight: '32px' }}>
+        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#104891', fontSize: '1.05rem', fontWeight: 700 }}>
           <span>📍</span> Medical Locator
         </h4>
         <div style={{ display: 'flex', gap: '4px', background: '#eae1d8', padding: '2px', borderRadius: '6px' }}>
@@ -358,11 +358,11 @@ const LeafletMap = () => {
       </div>
 
       {/* Geocoding Search Bar with Autocomplete suggestions */}
-      <div style={{ position: 'relative', display: 'flex', gap: '8px', marginBottom: '10px' }}>
-        <div style={{ flexGrow: 1, position: 'relative' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
           <input
             type="text"
-            placeholder="Type city or area name (e.g. Bangalore, mumbay)..."
+            placeholder="Type city or area name (e.g. Bangalore, Mumbai)..."
             value={searchQuery}
             onChange={handleInputChange}
             onFocus={() => {
@@ -373,8 +373,10 @@ const LeafletMap = () => {
             onKeyDown={(e) => e.key === 'Enter' && handleSearchLocation()}
             style={{
               width: '100%',
-              padding: '8px 12px',
-              fontSize: '0.8rem',
+              boxSizing: 'border-box',
+              height: '38px',
+              padding: '0 12px',
+              fontSize: '0.82rem',
               border: '1px solid #dcd1c4',
               borderRadius: '6px',
               background: '#ffffff',
@@ -387,14 +389,13 @@ const LeafletMap = () => {
           {suggestions.length > 0 && (
             <div style={{
               position: 'absolute',
-              top: '100%',
+              top: 'calc(100% + 4px)',
               left: 0,
               right: 0,
               background: '#ffffff',
               border: '1px solid #dcd1c4',
               borderRadius: '6px',
-              marginTop: '4px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
               zIndex: 1000,
               maxHeight: '180px',
               overflowY: 'auto'
@@ -439,16 +440,22 @@ const LeafletMap = () => {
           onClick={handleSearchLocation}
           disabled={searchingLocation}
           style={{
-            padding: '8px 16px',
-            fontSize: '0.8rem',
+            height: '38px',
+            padding: '0 16px',
+            fontSize: '0.82rem',
             background: '#104891',
             color: '#ffffff',
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',
-            fontWeight: 500,
+            fontWeight: 600,
             transition: 'all 0.2s',
-            flexShrink: 0
+            flexShrink: 0,
+            boxSizing: 'border-box',
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
         >
           {searchingLocation ? 'Searching...' : 'Search'}
@@ -461,8 +468,8 @@ const LeafletMap = () => {
           background: '#fef9f3',
           border: '1px solid #ebdcd0',
           borderRadius: '8px',
-          padding: '12px',
-          marginBottom: '10px',
+          padding: '10px 12px',
+          marginBottom: '12px',
           fontSize: '0.8rem'
         }}>
           <div style={{ fontWeight: 600, color: '#e83a30', marginBottom: '6px' }}>
@@ -505,9 +512,9 @@ const LeafletMap = () => {
         </div>
       )}
       
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', height: '240px' }}>
-        <div id="leaflet-map-container" style={{ borderRadius: '8px', border: '1px solid #dcd1c4', height: '100%', zIndex: 1 }}></div>
-        <div style={{ overflowY: 'auto', maxHeight: '240px', paddingRight: '4px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', flex: 1, minHeight: '260px' }}>
+        <div id="leaflet-map-container" style={{ borderRadius: '8px', border: '1px solid #dcd1c4', height: '100%', minHeight: '260px', zIndex: 1 }}></div>
+        <div style={{ overflowY: 'auto', height: '100%', maxHeight: '260px', paddingRight: '4px' }}>
           {!hasSearched ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '16px', textAlign: 'center', color: '#5e6b7c', fontSize: '0.82rem', minHeight: '180px' }}>
               <span>🔍</span>
@@ -631,13 +638,18 @@ const FirstAidGuide = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <h4 style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px', color: '#104891' }}>
-        <span>🩹</span> Emergency First Aid Guide
-      </h4>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', minHeight: '32px' }}>
+        <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#104891', fontSize: '1.05rem', fontWeight: 700 }}>
+          <span>🩹</span> Emergency First Aid Guide
+        </h4>
+        <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#e83a30', background: '#fdeeed', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(232,58,48,0.2)' }}>
+          ⚡ Quick Response
+        </span>
+      </div>
       
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', height: '240px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.1fr', gap: '12px', flex: 1, minHeight: '310px' }}>
         {/* Incident selector */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', height: '100%' }}>
           {Object.keys(incidents).map((key) => (
             <button
               key={key}
@@ -680,7 +692,7 @@ const FirstAidGuide = () => {
         </div>
 
         {/* Instructions pane */}
-        <div style={{ background: '#f9f6f2', padding: '12px', borderRadius: '8px', border: '1px solid #eae1d8', overflowY: 'auto' }}>
+        <div style={{ background: '#f9f6f2', padding: '14px', borderRadius: '8px', border: '1px solid #eae1d8', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
           <div style={{ fontWeight: 700, color: '#104891', fontSize: '0.9rem', marginBottom: '8px' }}>
             {incidents[selectedIncident].title}
           </div>
