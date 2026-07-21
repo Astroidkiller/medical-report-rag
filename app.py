@@ -85,7 +85,8 @@ def _print_risk_card(risk: dict):
             print(f"     • {f['test_name']}: {f['value']} {f['unit']} "
                   f"(ref: {f['reference']}) — {f['explanation']}")
 
-    print(f"\n  📝 AI Explanation:\n  {risk['explanation']}")
+    explanation = _redact_sensitive_text(risk.get("explanation", ""))
+    print(f"\n  📝 AI Explanation:\n  {explanation}")
 
 
 def _print_community_dashboard(community: dict):
