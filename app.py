@@ -11,6 +11,7 @@ Usage:
 import os
 import sys
 import glob
+import re
 
 # Ensure project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -29,6 +30,21 @@ from data_store.sqlite_store import get_total_reports, get_total_lab_values
 
 # ============================================================
 # Display Helpers
+
+
+def _redact_sensitive_text(text: str) -> str:
+    """Redact likely secrets from text before printing to CLI output."""
+    if not text:
+        return text
+
+    redacted = re.sub(r"(?i)\b(key|api[_-]?key|token|password)\s*=\s*([^\s&'\"`]+)", r"\1=REDACTED", text)
+
+    for env_name in ("GEMINI_API_KEY", "GROQ_API_KEY"):
+        secret = os.getenv(env_name)
+        if secret:
+            redacted = redacted.replace(secret, "REDACTED")
+
+    return redacted
 # ============================================================
 
 def _print_header():
@@ -207,7 +223,7 @@ def _community_analysis_interactive():
         if result.get("answer"):
             print(f"\n  🤖 Assistant:\n")
             for line in result["answer"].split("\n"):
-                print(f"  {line}")
+                print(f"  {_redact_sensitive_text(line)}")
         print()
 
 
