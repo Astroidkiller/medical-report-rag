@@ -12,7 +12,7 @@ services:
       - key: EMBEDDING_BACKEND
         value: gemini
       - key: VECTOR_STORE_BACKEND
-        value: chromadb
+        value: memory
       - key: GEMINI_API_KEY
         sync: false
 
