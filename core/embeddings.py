@@ -10,9 +10,19 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import EMBEDDING_MODEL, CHROMA_DB_DIR, TOP_K_RESULTS, EMBEDDING_BACKEND
 
 
+import sys
+import os
+import math
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import EMBEDDING_MODEL, CHROMA_DB_DIR, TOP_K_RESULTS, EMBEDDING_BACKEND, VECTOR_STORE_BACKEND
+
+
 # Module-level singletons (loaded lazily)
 _embedding_model = None
 _chroma_client = None
+_memory_collections = {}
 
 
 def get_embedding_model():
@@ -25,29 +35,20 @@ def get_embedding_model():
 
 
 def get_chroma_client():
-    """Get or create the ChromaDB client (singleton).
-
-    Uses the modern chromadb.Client() API (ephemeral, in-memory).
-    The deprecated chroma_db_impl / persist_directory Settings
-    kwargs were removed in ChromaDB >= 0.4.
-    """
+    """Get or create the ChromaDB client (singleton)."""
     global _chroma_client
     if _chroma_client is None:
-        import chromadb
-        # Modern ChromaDB: use EphemeralClient (in-memory, no deprecated Settings)
-        _chroma_client = chromadb.EphemeralClient()
+        try:
+            import chromadb
+            _chroma_client = chromadb.EphemeralClient()
+        except Exception:
+            _chroma_client = None
     return _chroma_client
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """
     Generate embeddings for a list of texts.
-
-    Args:
-        texts: List of text strings to embed.
-
-    Returns:
-        List of embedding vectors (as lists of floats).
     """
     if EMBEDDING_BACKEND in ("gemini", "vertex_ai"):
         from core.llm_client import embed_texts_gemini_rest
@@ -66,26 +67,34 @@ def store_chunks(
     id_prefix: str = "",
 ) -> None:
     """
-    Store text chunks and their embeddings in ChromaDB.
-
-    Args:
-        collection_name: Name of the ChromaDB collection.
-        chunks: Text chunks to store.
-        embeddings: Corresponding embedding vectors.
-        metadata_list: Optional list of metadata dicts per chunk.
-        id_prefix: Prefix for chunk IDs to avoid collisions across reports.
+    Store text chunks and their embeddings in ChromaDB or in-memory vector store.
     """
     if not chunks:
         return
 
+    # In-memory store or fallback if VECTOR_STORE_BACKEND=="memory"
+    if VECTOR_STORE_BACKEND == "memory" or get_chroma_client() is None:
+        if collection_name not in _memory_collections:
+            _memory_collections[collection_name] = []
+        
+        for i, chunk in enumerate(chunks):
+            emb = embeddings[i] if i < len(embeddings) else [0.0] * 768
+            meta = metadata_list[i] if metadata_list and i < len(metadata_list) else {}
+            cid = f"{id_prefix}_{i}" if id_prefix else str(i)
+            _memory_collections[collection_name].append({
+                "id": cid,
+                "document": chunk,
+                "embedding": np.array(emb, dtype=np.float32),
+                "metadata": meta
+            })
+        return
+
     client = get_chroma_client()
     collection = client.get_or_create_collection(name=collection_name)
-
     ids = [f"{id_prefix}_{i}" if id_prefix else str(i) for i in range(len(chunks))]
 
     metadatas = None
     if metadata_list:
-        # ChromaDB requires non-empty dicts if metadatas is provided
         cleaned_metadatas = [m for m in metadata_list if isinstance(m, dict) and len(m) > 0]
         if len(cleaned_metadatas) == len(chunks):
             metadatas = cleaned_metadatas
@@ -101,42 +110,61 @@ def store_chunks(
     collection.add(**add_kwargs)
 
 
-
 def query_similar(
     collection_name: str,
     query_text: str,
     n_results: int = None,
 ) -> dict:
     """
-    Query ChromaDB for chunks most similar to the query text.
-
-    Args:
-        collection_name: Name of the ChromaDB collection.
-        query_text: User's question or search query.
-        n_results: Number of results to return (default from config).
-
-    Returns:
-        ChromaDB query results dict with 'documents', 'metadatas', 'distances'.
+    Query vector store for chunks most similar to query_text using cosine similarity.
     """
     if n_results is None:
         n_results = TOP_K_RESULTS
 
-    query_embedding = embed_texts([query_text])[0]
+    query_embedding = np.array(embed_texts([query_text])[0], dtype=np.float32)
+
+    # In-memory query logic
+    if VECTOR_STORE_BACKEND == "memory" or get_chroma_client() is None:
+        items = _memory_collections.get(collection_name, [])
+        if not items:
+            return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+
+        scores = []
+        q_norm = np.linalg.norm(query_embedding) + 1e-9
+        for item in items:
+            emb = item["embedding"]
+            e_norm = np.linalg.norm(emb) + 1e-9
+            similarity = float(np.dot(query_embedding, emb) / (q_norm * e_norm))
+            # Convert cosine similarity to distance
+            distance = 1.0 - similarity
+            scores.append((distance, item["document"], item["metadata"]))
+
+        scores.sort(key=lambda x: x[0])
+        top_k = scores[:n_results]
+
+        return {
+            "documents": [[x[1] for x in top_k]],
+            "metadatas": [[x[2] for x in top_k]],
+            "distances": [[x[0] for x in top_k]]
+        }
 
     client = get_chroma_client()
     collection = client.get_or_create_collection(name=collection_name)
 
     results = collection.query(
-        query_embeddings=[query_embedding],
+        query_embeddings=[query_embedding.tolist()],
         n_results=n_results,
     )
     return results
 
 
 def clear_collection(collection_name: str) -> None:
-    """Delete all documents from a ChromaDB collection."""
-    client = get_chroma_client()
-    try:
-        client.delete_collection(name=collection_name)
-    except Exception:
-        pass  # Collection doesn't exist yet
+    """Delete all documents from vector store collection."""
+    if collection_name in _memory_collections:
+        _memory_collections[collection_name] = []
+    
+    if get_chroma_client():
+        try:
+            get_chroma_client().delete_collection(name=collection_name)
+        except Exception:
+            pass  # Collection doesn't exist yet

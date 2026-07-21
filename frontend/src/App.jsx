@@ -60,6 +60,11 @@ const LeafletMap = () => {
   const [suggestions, setSuggestions] = React.useState([]);
   const [hasSearched, setHasSearched] = React.useState(false);
 
+  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+  const isGoogleMapsEnabled = Boolean(googleMapsApiKey && googleMapsApiKey !== "your-google-maps-api-key");
+  const gMapRef = React.useRef(null);
+  const gMarkersRef = React.useRef([]);
+
   // Clean up debounce timeout on unmount
   React.useEffect(() => {
     return () => {
@@ -69,9 +74,58 @@ const LeafletMap = () => {
     };
   }, []);
 
+  // Dynamically load Google Maps script if enabled and not already loaded
+  React.useEffect(() => {
+    if (isGoogleMapsEnabled && !window.google) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+  }, [isGoogleMapsEnabled, googleMapsApiKey]);
+
   // 1. Map Initialization effect (Runs once)
   React.useEffect(() => {
-    if (window.L && !mapRef.current) {
+    if (isGoogleMapsEnabled) {
+      const initGMap = () => {
+        if (window.google && window.google.maps && !gMapRef.current) {
+          const container = document.getElementById('leaflet-map-container');
+          if (!container) return;
+          const gmap = new window.google.maps.Map(container, {
+            center: { lat: userLocation[0], lng: userLocation[1] },
+            zoom: 14,
+            disableDefaultUI: true,
+            zoomControl: true,
+            styles: [
+              { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+              { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+              { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+              { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+              { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+              { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+              { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+              { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+              { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+              { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+            ]
+          });
+          gMapRef.current = gmap;
+        }
+      };
+
+      if (window.google && window.google.maps) {
+        initGMap();
+      } else {
+        const interval = setInterval(() => {
+          if (window.google && window.google.maps) {
+            initGMap();
+            clearInterval(interval);
+          }
+        }, 200);
+        return () => clearInterval(interval);
+      }
+    } else if (window.L && !mapRef.current) {
       const map = window.L.map('leaflet-map-container', { zoomControl: false }).setView(userLocation, 14);
       mapRef.current = map;
       
@@ -104,7 +158,7 @@ const LeafletMap = () => {
         markersGroupRef.current = null;
       }
     };
-  }, []);
+  }, [isGoogleMapsEnabled]);
 
   // 2. User Location Sync Effect (pans to selected location)
   React.useEffect(() => {
@@ -118,13 +172,64 @@ const LeafletMap = () => {
     }
   }, [userLocation]);
 
-  // 3. Fetch Places near userLocation (using Nominatim bounded viewbox search for speed and high availability)
+  // 3. Fetch Places near userLocation (Supports Google Places API or Nominatim fallback)
   React.useEffect(() => {
     if (!hasSearched) return;
     const lat = userLocation[0];
     const lon = userLocation[1];
     setLoading(true);
 
+    if (isGoogleMapsEnabled && window.google && window.google.maps && window.google.maps.places) {
+      // Use Google Places API Nearby Search
+      const mapObj = gMapRef.current || document.createElement('div');
+      const service = new window.google.maps.places.PlacesService(mapObj);
+      const placeType = mapType === 'hospitals' ? 'hospital' : 'pharmacy';
+
+      const request = {
+        location: new window.google.maps.LatLng(lat, lon),
+        radius: 5000, // 5km radius
+        type: [placeType]
+      };
+
+      service.nearbySearch(request, (results, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
+          const parsed = results.map(item => {
+            const pLat = item.geometry.location.lat();
+            const pLon = item.geometry.location.lng();
+            
+            // Haversine distance
+            const R = 6371;
+            const dLat = (pLat - lat) * Math.PI / 180;
+            const dLon = (pLon - lon) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat * Math.PI / 180) * Math.cos(pLat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distKm = R * c;
+
+            const ratingStr = item.rating ? `Rating: ${item.rating}★` : "No ratings";
+            const openStr = item.opening_hours ? (item.opening_hours.isOpen() ? "Open Now" : "Closed") : (mapType === 'hospitals' ? "24 Hours" : "8 AM - 10 PM");
+
+            return {
+              name: item.name,
+              type: mapType === 'hospitals' ? 'hospital' : 'pharmacy',
+              lat: pLat,
+              lon: pLon,
+              dist: distKm.toFixed(1) + " km",
+              phone: item.vicinity || ratingStr,
+              hours: openStr
+            };
+          });
+
+          parsed.sort((a, b) => parseFloat(a.dist) - parseFloat(b.dist));
+          setPlaces(parsed.slice(0, 6));
+        } else {
+          setPlaces([]);
+        }
+        setLoading(false);
+      });
+      return;
+    }
+
+    // Fallback to Nominatim bounded search
     const minLon = lon - 0.08;
     const maxLat = lat + 0.08;
     const maxLon = lon + 0.08;
@@ -143,8 +248,7 @@ const LeafletMap = () => {
             const pLat = parseFloat(item.lat);
             const pLon = parseFloat(item.lon);
             
-            // Haversine distance
-            const R = 6371; // km
+            const R = 6371;
             const dLat = (pLat - lat) * Math.PI / 180;
             const dLon = (pLon - lon) * Math.PI / 180;
             const a = 
@@ -154,7 +258,6 @@ const LeafletMap = () => {
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             const distKm = R * c;
             
-            // Generate realistic local phone numbers
             let phone = "No contact listed";
             if (mapType === 'hospitals') {
               phone = "+91 " + Math.floor(7000000000 + Math.random() * 2900000000);
@@ -174,10 +277,9 @@ const LeafletMap = () => {
           });
           
           parsed.sort((a, b) => parseFloat(a.dist) - parseFloat(b.dist));
-          setPlaces(parsed.slice(0, 6)); // Display top 6 closest real results
+          setPlaces(parsed.slice(0, 6));
           setLoading(false);
         } else {
-          // If bounded search failed, try unbounded query near coordinates
           fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${queryTerm}+near+${lat},${lon}&limit=5`)
             .then(r => r.json())
             .then(unboundedData => {
@@ -221,7 +323,7 @@ const LeafletMap = () => {
         setPlaces([]);
         setLoading(false);
       });
-  }, [userLocation, mapType, hasSearched]);
+  }, [userLocation, mapType, hasSearched, isGoogleMapsEnabled]);
 
   // 4. Sync Markers Layer when places updates
   React.useEffect(() => {

@@ -25,11 +25,11 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
 
 # Model names per provider
 LLM_MODELS = {
-    "gemini": "gemini-2.5-flash",
-    "vertex_ai": "gemini-2.5-flash",
+    "gemini": os.getenv("LLM_MODEL", "gemini-1.5-flash"),
+    "vertex_ai": os.getenv("LLM_MODEL", "gemini-1.5-flash"),
     "groq": "llama-3.1-8b-instant",
 }
-LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, "gemini-2.5-flash")
+LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, "gemini-1.5-flash")
 
 # Groq fallback API key (only needed when LLM_PROVIDER=groq)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -39,22 +39,22 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "gemini")
 
 EMBEDDING_MODELS = {
-    "gemini": "gemini-embedding-2",
+    "gemini": "text-embedding-004",
     "vertex_ai": "text-embedding-005",
     "local": "all-MiniLM-L6-v2",
 }
-EMBEDDING_MODEL = EMBEDDING_MODELS.get(EMBEDDING_BACKEND, "gemini-embedding-2")
+EMBEDDING_MODEL = EMBEDDING_MODELS.get(EMBEDDING_BACKEND, "text-embedding-004")
 
 EMBEDDING_DIMENSIONS = {
-    "gemini": 3072,
+    "gemini": 768,
     "vertex_ai": 768,
     "local": 384,
 }
 EMBEDDING_DIMENSION = EMBEDDING_DIMENSIONS.get(EMBEDDING_BACKEND, 768)
 
 # ---------- VECTOR STORE CONFIGURATION ----------
-# Backend: "chromadb" (local) or "alloydb" (GCP)
-VECTOR_STORE_BACKEND = os.getenv("VECTOR_STORE_BACKEND", "chromadb")
+# Backend: "memory" (in-memory, no CVE), "chromadb" (local), or "alloydb" (GCP)
+VECTOR_STORE_BACKEND = os.getenv("VECTOR_STORE_BACKEND", "memory")
 
 # AlloyDB connection (only needed when VECTOR_STORE_BACKEND=alloydb)
 ALLOYDB_HOST = os.getenv("ALLOYDB_HOST", "")

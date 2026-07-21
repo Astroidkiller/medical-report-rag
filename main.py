@@ -51,6 +51,12 @@ app.add_middleware(
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "patient_uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Mount React frontend build if present (for single-port Cloud Run deployment)
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+if os.path.exists(STATIC_DIR):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 class ChatRequest(BaseModel):
     query: str

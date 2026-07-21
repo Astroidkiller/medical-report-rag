@@ -151,10 +151,12 @@ def ingest_report(
         insert_lab_values(lab_records)
 
     from core.fhir_models import create_fhir_observation_from_flagged_value
+    from core.fhir_converter import build_fhir_bundle
     fhir_observations = [
         create_fhir_observation_from_flagged_value(fv, report_id, patient_id)
         for fv in flagged_values
     ]
+    fhir_bundle = build_fhir_bundle(fhir_observations)
 
     return {
         "report_id": report_id,
@@ -165,6 +167,7 @@ def ingest_report(
         "lab_values": all_lab_values,
         "flagged_values": flagged_values,
         "fhir_observations": fhir_observations,
+        "fhir_bundle": fhir_bundle,
         "risk_summary": risk_summary,
         "region": anonymized_region,
         "age_group": age_group,

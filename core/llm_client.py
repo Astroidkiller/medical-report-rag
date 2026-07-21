@@ -124,13 +124,28 @@ def _mask_api_key(text: str) -> str:
     return re.sub(r"key=[^&\s'\"]+", "key=REDACTED", text)
 
 
-def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
-    """Generate with Google Gemini API using direct REST calls (no SDK needed)."""
+def _get_gemini_url(model: str, stream: bool = False) -> str:
+    """Build URL for either standard Gemini REST API or GCP Vertex AI REST API."""
     api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
+    project_id = GCP_PROJECT_ID or os.getenv("GCP_PROJECT_ID")
+    location = GCP_LOCATION or os.getenv("GCP_LOCATION", "us-central1")
+    action = "streamGenerateContent?alt=sse" if stream else "generateContent"
 
-    url = f"{GEMINI_API_BASE}/{model}:generateContent?key={api_key}"
+    if LLM_PROVIDER == "vertex_ai" and project_id:
+        url = f"https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models/{model}:{action}"
+        if api_key:
+            url += f"&key={api_key}" if "?" in action else f"?key={api_key}"
+        return url
+    else:
+        url = f"{GEMINI_API_BASE}/{model}:{action}"
+        if api_key:
+            url += f"&key={api_key}" if "?" in action else f"?key={api_key}"
+        return url
+
+
+def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
+    """Generate with Google Gemini API / Vertex AI using direct REST calls."""
+    url = _get_gemini_url(model, stream=False)
 
     body = {
         "contents": [
@@ -149,12 +164,13 @@ def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
             "parts": [{"text": system_prompt}]
         }
 
+    headers = {"Content-Type": "application/json"}
+
     try:
-        resp = requests.post(url, json=body, timeout=_LLM_TIMEOUT)
+        resp = requests.post(url, json=body, headers=headers, timeout=_LLM_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
 
-        # Extract text from response
         candidates = data.get("candidates", [])
         if candidates:
             parts = candidates[0].get("content", {}).get("parts", [])
@@ -168,19 +184,15 @@ def _generate_gemini_rest(prompt: str, system_prompt: str, model: str) -> str:
             error_body = e.response.json().get("error", {}).get("message", str(e))
         except Exception:
             error_body = str(e)
-        raise RuntimeError(_mask_api_key(f"Gemini API error: {error_body}")) from e
+        raise RuntimeError(_mask_api_key(f"Gemini/Vertex AI error: {error_body}")) from e
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(_mask_api_key(f"Gemini API request failed: {e}")) from e
+        raise RuntimeError(_mask_api_key(f"Gemini/Vertex AI request failed: {e}")) from e
 
 
 
 def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
-    """Stream with Google Gemini API using direct REST calls."""
-    api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
-
-    url = f"{GEMINI_API_BASE}/{model}:streamGenerateContent?key={api_key}&alt=sse"
+    """Stream with Google Gemini API / Vertex AI using direct REST calls."""
+    url = _get_gemini_url(model, stream=True)
 
     body = {
         "contents": [
