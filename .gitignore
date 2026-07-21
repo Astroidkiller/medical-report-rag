@@ -12,4 +12,5 @@ dist/
 build/
 .next/
 .vercel/
-.cache/
+*.cache/
+*.zip
