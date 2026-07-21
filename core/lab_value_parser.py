@@ -344,7 +344,7 @@ Each JSON object must have EXACTLY these keys:
             try:
                 name = str(item["test_name"]).strip()
                 if _is_noise(name):
-                    print(f"[EXTRACTION FILTERED NOISE]: '{name}'")
+                    print("[EXTRACTION FILTERED NOISE]")
                     continue
 
                 results.append(ExtractedLabValue(
