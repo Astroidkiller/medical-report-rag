@@ -4,6 +4,7 @@ import os
 import json
 import uuid
 import shutil
+import logging
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,8 @@ from data_store.sqlite_store import (
     get_test_trend,
     get_all_test_names,
 )
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Community Health Intelligence Assistant API",
@@ -117,10 +120,11 @@ async def upload_reports(
             res.pop("chunks", None)
             res.pop("lab_values", None)
             results.append(res)
-        except Exception as e:
+        except Exception:
             # Clean up files on error
             shutil.rmtree(session_dir, ignore_errors=True)
-            raise HTTPException(status_code=500, detail=f"Failed to ingest {filename}: {str(e)}")
+            logger.exception("Failed to ingest uploaded file: %s", filename)
+            raise HTTPException(status_code=500, detail=f"Failed to ingest {filename}. Please try again.")
 
     return {"session_id": session_id, "results": results}
 
@@ -149,8 +153,9 @@ async def chat_stream(request: ChatRequest):
             yield f"data: {json.dumps({'type': 'sources', 'sources': response['source_chunks'], 'metadata': response['source_metadata']})}\n\n"
             yield "data: [DONE]\n\n"
 
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
+        except Exception:
+            logger.exception("Streaming chat request failed")
+            yield f"data: {json.dumps({'type': 'error', 'detail': 'An internal error occurred. Please try again.'})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse_generator(), media_type="text/event-stream; charset=utf-8")

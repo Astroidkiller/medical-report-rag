@@ -17,6 +17,7 @@ Usage:
 import os
 import sys
 import json
+import logging
 import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,6 +29,8 @@ from config import (
     GCP_LOCATION,
     GROQ_API_KEY,
 )
+
+logger = logging.getLogger(__name__)
 
 # Timeout for LLM calls (seconds)
 _LLM_TIMEOUT = 60
@@ -219,8 +222,9 @@ def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
                                 yield text
                 except json.JSONDecodeError:
                     continue
-        except Exception as e:
-            yield f"\n\n[Streaming error: {_mask_api_key(str(e))}]"
+        except Exception:
+            logger.exception("Gemini streaming request failed")
+            yield "\n\n[Streaming error: An internal error occurred.]"
 
     return _chunks()
 
