@@ -269,7 +269,7 @@ def embed_texts_gemini_rest(texts: list[str], model: str = "gemini-embedding-2")
             
         return all_embeddings
     except Exception as e:
-        print(f"Batch embedding error: {_mask_api_key(str(e))}")
+        print(f"Batch embedding error ({type(e).__name__})")
         # Return zero vectors as fallback
         return [[0.0] * 768] * len(texts)
 
