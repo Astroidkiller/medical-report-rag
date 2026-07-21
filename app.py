@@ -37,7 +37,39 @@ def _redact_sensitive_text(text: str) -> str:
     if not text:
         return text
 
-    redacted = re.sub(r"(?i)\b(key|api[_-]?key|token|password)\s*=\s*([^\s&'\"`]+)", r"\1=REDACTED", text)
+    redacted = text
+
+    # Redact common secret key/value patterns in plain text and JSON-like output.
+    redacted = re.sub(
+        r"""(?ix)
+        \b(
+            password|
+            passwd|
+            pwd|
+            token|
+            access[_-]?token|
+            refresh[_-]?token|
+            api[_-]?key|
+            key|
+            secret|
+            client[_-]?secret|
+            bearer|
+            authorization|
+            auth
+        )\b
+        \s*[:=]\s*
+        (["'`])?([^\s,&'"`}{\]]+)\2?
+        """,
+        r"\1=REDACTED",
+        redacted,
+    )
+
+    # Redact URL query parameter forms like ?key=... or &api_key=...
+    redacted = re.sub(
+        r"""(?i)([?&](?:key|api[_-]?key|token|access_token|authorization)=)[^&\s'"]+""",
+        r"\1REDACTED",
+        redacted,
+    )
 
     for env_name in ("GEMINI_API_KEY", "GROQ_API_KEY"):
         secret = os.getenv(env_name)
