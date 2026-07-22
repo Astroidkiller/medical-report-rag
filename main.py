@@ -231,7 +231,13 @@ if os.path.exists(frontend_dist):
     async def serve_frontend(full_path: str):
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="API endpoint not found")
-        file_path = os.path.join(frontend_dist, full_path)
+
+        base_dir = os.path.abspath(frontend_dist)
+        file_path = os.path.abspath(os.path.join(base_dir, full_path))
+
+        if os.path.commonpath([base_dir, file_path]) != base_dir:
+            raise HTTPException(status_code=404, detail="File not found")
+
         if full_path and os.path.exists(file_path) and os.path.isfile(file_path):
             return FileResponse(file_path)
         return FileResponse(os.path.join(frontend_dist, "index.html"))
