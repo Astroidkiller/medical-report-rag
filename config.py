@@ -25,11 +25,11 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
 
 # Model names per provider
 LLM_MODELS = {
-    "gemini": os.getenv("LLM_MODEL", "gemini-1.5-flash"),
-    "vertex_ai": os.getenv("LLM_MODEL", "gemini-1.5-flash"),
+    "gemini": os.getenv("LLM_MODEL", "gemini-2.5-flash"),
+    "vertex_ai": os.getenv("LLM_MODEL", "gemini-2.5-flash"),
     "groq": "llama-3.1-8b-instant",
 }
-LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, "gemini-1.5-flash")
+LLM_MODEL = LLM_MODELS.get(LLM_PROVIDER, "gemini-2.5-flash")
 
 # Groq fallback API key (only needed when LLM_PROVIDER=groq)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -39,11 +39,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "gemini")
 
 EMBEDDING_MODELS = {
-    "gemini": "text-embedding-004",
+    "gemini": "gemini-embedding-001",
     "vertex_ai": "text-embedding-005",
     "local": "all-MiniLM-L6-v2",
 }
-EMBEDDING_MODEL = EMBEDDING_MODELS.get(EMBEDDING_BACKEND, "text-embedding-004")
+EMBEDDING_MODEL = EMBEDDING_MODELS.get(EMBEDDING_BACKEND, "gemini-embedding-001")
 
 EMBEDDING_DIMENSIONS = {
     "gemini": 768,

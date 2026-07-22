@@ -234,9 +234,17 @@ def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
                                 yield text
                 except json.JSONDecodeError:
                     continue
-        except Exception:
-            logger.exception("Gemini streaming request failed")
-            yield "\n\n[Streaming error: An internal error occurred.]"
+        except requests.exceptions.HTTPError as e:
+            error_detail = str(e)
+            try:
+                error_detail = e.response.json().get("error", {}).get("message", str(e))
+            except Exception:
+                pass
+            logger.error("Gemini streaming HTTP error: %s", error_detail)
+            yield f"\n\n[Streaming error: {error_detail}]"
+        except Exception as e:
+            logger.exception("Gemini streaming request failed: %s", e)
+            yield f"\n\n[Streaming error: {str(e)}]"
 
     return _chunks()
 
@@ -244,7 +252,7 @@ def _stream_gemini_rest(prompt: str, system_prompt: str, model: str):
 # ---------- Gemini Embeddings via REST ----------
 
 
-def embed_texts_gemini_rest(texts: list[str], model: str = "gemini-embedding-2") -> list[list[float]]:
+def embed_texts_gemini_rest(texts: list[str], model: str = "gemini-embedding-001") -> list[list[float]]:
     """Generate embeddings using Gemini REST API (batch endpoint for high performance)."""
     api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
     if not api_key:
