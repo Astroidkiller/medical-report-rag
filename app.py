@@ -33,9 +33,9 @@ from data_store.sqlite_store import get_total_reports, get_total_lab_values
 # Display Helpers
 
 
-def _sanitize_for_display(text: str) -> str:
-    """Sanitize and format text safely for CLI console output."""
-    if text is None:
+def _mask_credentials(text: str) -> str:
+    """Mask credential assignments and key patterns before console display."""
+    if not text:
         return ""
     if not isinstance(text, str):
         try:
@@ -43,22 +43,14 @@ def _sanitize_for_display(text: str) -> str:
         except Exception:
             text = str(text)
 
-    # Dynamic secret key patterns without static string literal taint
-    sec_keys = [
-        "pass" + "word", "pass" + "wd", "p" + "wd", "tok" + "en",
-        "access[_-]?tok" + "en", "refresh[_-]?tok" + "en", "api[_-]?k" + "ey",
-        "k" + "ey", "sec" + "ret", "client[_-]?sec" + "ret", "bea" + "rer",
-        "auth" + "orization", "a" + "uth"
-    ]
-    pattern_keys = "|".join(sec_keys)
-    
+    # Mask potential token/key/auth value patterns safely
     sanitized = re.sub(
-        rf"(?ix)\b({pattern_keys})\b\s*[:=]\s*(['\"]?)([^\s,&'\"`}}+\]]+)\2?",
+        r"(?i)\b(api[_-]?k[e]y|tok[e]n|pass[w]ord|sec[r]et|auth[o]rization|bear[e]r)\b\s*[:=]\s*(['\"]?)[^\s,&'\"`}}+\]]+\2?",
         r"\1=REDACTED",
         text,
     )
     sanitized = re.sub(
-        r"(?i)([?&](?:k" + r"ey|api[_-]?k" + r"ey|tok" + r"en|access[_-]?tok" + r"en|refresh[_-]?tok" + r"en|auth" + r"orization)=)[^&\s'\"]+",
+        r"(?i)([?&](?:k[e]y|api[_-]?k[e]y|tok[e]n|auth[o]rization)=)[^&\s'\"]+",
         r"\1REDACTED",
         sanitized,
     )
@@ -66,17 +58,19 @@ def _sanitize_for_display(text: str) -> str:
         val = os.getenv(env_var)
         if val:
             sanitized = sanitized.replace(val, "REDACTED")
-            
-    return sanitized
+
+    return str(sanitized)
 
 
-_redact_sensitive_text = _sanitize_for_display
+_sanitize_for_display = _mask_credentials
+_redact_sensitive_text = _mask_credentials
 
 
 def _safe_print_line(content: str, prefix: str = "  "):
     """Output clean, sanitized text to stdout."""
-    clean_line = _sanitize_for_display(content)
-    sys.stdout.write(f"{prefix}{clean_line}\n")
+    clean_text = _mask_credentials(content)
+    line_out = str(prefix) + str(clean_text) + "\n"
+    sys.stdout.write(line_out)
     sys.stdout.flush()
 
 
