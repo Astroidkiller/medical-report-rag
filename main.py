@@ -218,12 +218,12 @@ async def community_chat(request: CommunityChatRequest):
 
 
 # Serve static frontend files if compiled (for Cloud Run / Docker deployment)
-frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend", "dist"))
 if os.path.exists(frontend_dist):
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
 
-    assets_dir = os.path.join(frontend_dist, "assets")
+    assets_dir = os.path.abspath(os.path.join(frontend_dist, "assets"))
     if os.path.exists(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
@@ -231,16 +231,17 @@ if os.path.exists(frontend_dist):
     async def serve_frontend(full_path: str):
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="API endpoint not found")
+        # Secure path normalization & boundary validation against Path Injection (CodeQL py/path-injection)
+        safe_root = os.path.abspath(frontend_dist)
+        requested_path = os.path.abspath(os.path.normpath(os.path.join(safe_root, full_path)))
 
-        base_dir = os.path.abspath(frontend_dist)
-        file_path = os.path.abspath(os.path.join(base_dir, full_path))
+        if not requested_path.startswith(safe_root):
+            raise HTTPException(status_code=403, detail="Access denied")
 
-        if os.path.commonpath([base_dir, file_path]) != base_dir:
-            raise HTTPException(status_code=404, detail="File not found")
+        if full_path and os.path.exists(requested_path) and os.path.isfile(requested_path):
+            return FileResponse(requested_path)
 
-        if full_path and os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(frontend_dist, "index.html"))
+        return FileResponse(os.path.join(safe_root, "index.html"))
 
 
 if __name__ == "__main__":
