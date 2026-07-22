@@ -212,8 +212,9 @@ async def community_chat(request: CommunityChatRequest):
     try:
         res = answer_community_question(request.query)
         return {"answer": res["answer"]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Community chat request failed")
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
 
 
