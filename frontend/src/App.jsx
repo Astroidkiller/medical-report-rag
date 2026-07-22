@@ -16,10 +16,75 @@ import {
   Info,
   Clock,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  FileText
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+
+// Collapsible RAG Source Evidence Component for AI Chat
+const ChatSourceEvidence = ({ sources, metadata }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [expandedChunks, setExpandedChunks] = useState({});
+
+  if (!sources || sources.length === 0) return null;
+
+  const toggleChunk = (sIdx) => {
+    setExpandedChunks(prev => ({
+      ...prev,
+      [sIdx]: !prev[sIdx]
+    }));
+  };
+
+  return (
+    <div className="sources-wrapper">
+      <button 
+        type="button"
+        className="sources-toggle-btn"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <FileText size={12} />
+          <span>Source Evidence ({sources.length})</span>
+        </span>
+        {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </button>
+
+      {expanded && (
+        <div className="sources-container">
+          {sources.map((src, sIdx) => {
+            const isLong = src.length > 100;
+            const isChunkExpanded = expandedChunks[sIdx];
+            const displayText = (isLong && !isChunkExpanded) 
+              ? `${src.slice(0, 100)}...` 
+              : src;
+            const pageNum = metadata?.[sIdx]?.page || 1;
+
+            return (
+              <div key={sIdx} className="source-attribution-card">
+                <div className="source-meta">
+                  <span className="source-badge">Page {pageNum}</span>
+                  {isLong && (
+                    <button 
+                      type="button"
+                      className="source-expand-link"
+                      onClick={() => toggleChunk(sIdx)}
+                    >
+                      {isChunkExpanded ? 'Show less' : 'Show full excerpt'}
+                    </button>
+                  )}
+                </div>
+                <div className="source-text">"{displayText}"</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Simple Plotly Wrapper to render CDN charts
 const PlotlyChart = ({ id, data, layout }) => {
@@ -1602,20 +1667,7 @@ Do not use emojis in descriptions.`,
                                 ) : (
                                   <div style={{ fontSize: '0.94rem' }}>{renderTextFormat(msg.text)}</div>
                                 )}
-                                
-                                {/* RAG Source attributions */}
-                                {msg.sources && msg.sources.length > 0 && (
-                                  <div style={{ marginTop: '10px' }}>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--taupe)', marginBottom: '4px' }}>
-                                      Source Evidence from Report:
-                                    </div>
-                                    {msg.sources.map((src, sIdx) => (
-                                      <div key={sIdx} className="source-attribution">
-                                        "{src}" (Source Page: {msg.metadata?.[sIdx]?.page || 1})
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                <ChatSourceEvidence sources={msg.sources} metadata={msg.metadata} />
                               </div>
                             );
                           })}
